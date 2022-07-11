@@ -37,9 +37,10 @@ arthemis <- arthemis %>%
     Seq_length == 658) %>%
     select(- Sequence_validity)
 
-# Filtering the sequences that are the right size for the bold sequences too
+# Filtering the bold database to keep only the useful
+# sequences (size = 658 bases)
 
-bold <- bold  %>%
+bold <- bold %>%
     filter(Seq_length == 658)
 
 # Putting the columns in the right order in the two dataframes
@@ -90,7 +91,8 @@ for (i in seq_len(nrow(global))) {
     }
 }
 
-
+print("loop_ok")
+print(global)
 
 # Exporting the final as a tsv file
 print(x)
@@ -101,3 +103,5 @@ write.table(global,
     dec = ".",
     row.names = FALSE,
     col.names = TRUE)
+
+print("done")
