@@ -1,0 +1,981 @@
+---
+title: "Script V0 pour traiter les données brutes microbiotes bactéries"
+author: "Jacques_DAVID-Basile_PAJOT"
+date: '2022-06-30'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r}
+# Installing and importing all the necessary libraries
+# install.packages("anyLib") # Importing the library(use if you don't already have it)
+library(anyLib)  # This library allows you to import (if it is not already the case) and load all the selected libraries
+anyLib(c("FactoMineR", "lme4", "dendextend", "viridis", "mlmm.gwas", "tidyverse", "dbplyr", "stringr"))
+
+# Setting the working directory of the project (it must be changed when you use it on your computer. Set it to your project directory)
+
+setwd("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Jacques/Jacques_project_bacteria")
+par(mfrow = c(1, 1)) # Default plotting system
+```
+
+# Function definition
+
+## Definition of the Hdeux function
+
+This function allows to calculate the environmental and genetic variance of the input (a vector and a table) by using a mixed linear model.
+
+```{r}
+Hdeux <- function(X, CO) {
+  mod <- lmer(X ~ (1|EPO) + BLOC, data = CO)  # Fits a linear mixed model defining the phenotype as a combination of a random genotype and a fixed environmental placement
+  VG <- data.frame(VarCorr(mod))[1,4]         # Calculating the genetic variability in the model thanks to the estimated variance and covariance of the genetic effect on the phenotype
+  VE <- data.frame(VarCorr(mod))[2,4]         # Calculating the environmental variabilility in the model thanks to the estimated variance and covariance of the environmental effect on the phenotype
+  return(c(VG, VE))  # And we return the two calculated variance and covarianceof the model
+}
+```
+
+## Definition of the blups function
+
+This function allows us to calculate the BLUPS of a data set thanks to a mixed linear model
+
+```{r}
+blups <- function(X, CO) {
+  mod <- lmer(X ~ (1|EPO) + BLOC, data = CO)  # Here, we define a mixed model where X is the phenotype (here, the axis of the PCA), (1|EPO) is the random effect of the genotype on the phenotype and BLOC is the fixed effect of the environment on the phenotype.
+  BL <- ranef(mod) # Here, we extract the conditional means of the random effect of the fitted mixed model above. 
+  return(BL) # And we return the conditional means of the mixed linear model above
+}
+```
+
+# Import of the data and filtering the useful one
+
+```{r}
+A <- as.data.frame(read.table("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Jacques/Jacques_project_bacteria/OTU_16S_EPO 050422-copy.csv", sep = ";", header = TRUE))   # This should be changed on your computer (the route is different)
+
+# Transforming the numbers into numeric data
+
+C <- apply(A[, 12:ncol(A)], 2, as.numeric) # conversion of the numeric data into numeric type
+A <- cbind(A[, 1:11], C) # Replacing the numbers in the table with the new converted numeric data
+A <- A[-which(A$otu_id == "no data"),] # Taking out all the lines with no data
+
+# Here, we sort the data table to keep only 
+B <- A %>%  
+  filter(Kingdom != "no data",            # Filtering the data on the different taxonomic levels 
+        Phylum != "Multi-affiliation",
+        Phylum != "no data",
+        Class != "Multi-affiliation",
+        !str_detect(Class, "unknown"),
+        !str_detect(Order, "unknown"),
+        Order != "Multi-affiliation",
+        !str_detect(Family, "unknown"),
+        Family != "Multi-affiliation",
+        !str_detect(Genus, "unknown"),
+        Genus != "Multi-affiliation",
+        !str_detect(Species, "unknown"),
+        Species != "Multi-affiliation") %>%
+  select(-c(otu_id, blast_perc_identity, seed_sequence, observation_sum)) %>% # Taking out the unused columns on which the group_by function will not be able to act
+  group_by(Kingdom, Phylum, Class, Order, Family, Genus, Species) %>% # Grouping by taxonomic resemblance
+  summarise_each(sum)                       # Making a sum of each column by taxonomic group
+
+B$otu_id <- paste0("Cluster_", rownames(B)) # We add cluster numbers to the B file to treat each different taxa with a new name. Each number is independent between tables A and B. They are generated arbitrarily.
+
+NomsColsA <- names(A)      # Variable to be able to call for the names to debug later on and know the names because you can not open the table in the file explorer (too big file)
+NomsColsB <- names(B)      # Variable to be able to call for the names to debug later on
+
+dim(A)                     # Print out the initial dimension of the table to observe the changes
+dim(B)                     # Print out the initial dimension of the table to observe the changes
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(C)
+```
+
+
+# Visualisation and sorting of the data by their distribution
+
+```{r}
+SA <- A[, 12:247]  # Keeping only the data on the different clusters considering the wheat lines
+SB <- as.data.frame(B[, 8:243])   # Keeping only the data on the different clusters considering the wheat lines
+
+SA <- SA[,-c(65,160)] #We take out ELAX.252.R2 (65) and ELAX.453.R2 (160) that come out massively in the PCA otherwise (maybe soil bacteria)
+SB <- SB[,-c(65,160)] #We take out ELAX.252.R2 (65) and ELAX.453.R2 (160) that come out massively in the PCA otherwise (maybe soil bacteria)
+
+rownames(SA) <- A[, 1]  # We add the number of the cluster to the SA file
+rownames(SB) <- B$otu_id  # We add the number of the cluster to the SB file
+
+sommeA <- apply(SA, 2, sum)  # Calculating the total number of reads per EPO (how many reads do we find per EPO?)
+sommeCA <- apply(SA, 1, sum) # Calculating the total number of reads depending on the considered cluster (how many reads are there per cluster?)
+sommeB <- apply(SB, 2, sum)  # Calculating the total number of reads per EPO (how many reads do we find per EPO?)
+sommeCB <- apply(SB, 1, sum) # Calculating the total number of reads depending on the considered cluster (how many reads are there per taxonomic group?)
+
+# We plot the results to have an idea of the distribution of the EPOs per cluster or taxonomic group
+hist(log10(sommeCA), main = "Distribution of the number of reads per cluster")
+hist(log10(sommeCB), main = "Distribution of the number of reads per \ntaxonomic group")
+
+# We select the clusters/taxonomic groups in which there are more than 500 reads
+liste_clusterA <- which(sommeCA > 500)  # For that, we make a list giving us the number of the lines in which there are more than 500 reads per cluster
+liste_clusterB <- which(sommeCB > 500)  # The same as just above but per taxonomic group
+SA <- SA[liste_clusterA, ]    # Then we use the list of numbers to select the right clusters in the table and keep only the ones that have more than 500 reads
+SB <- SB[liste_clusterB, ]    # Same as above but with taxonomic groups
+
+# These two lines give the new size of the tables we will work with
+dim(SA)
+dim(SB)
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(liste_clusterA, liste_clusterB, sommeCA, sommeCB)
+```
+
+# Working on the abondance of reads per EPO
+
+```{r}
+# We calculate the abundance using the last matrix with the sorted data by size and transform it to be able to manipulate the clusters/taxonomic groups more easily. The abundance represents the proportion of reads of each cluster/taxonomic group per EPO
+ABONDANCE_A <- t(SA) / sommeA # PB: ARE WE SURE WE SHOULD USE THIS SUM ? on ne devrait pas refaire une somme sur les nouvelles données triées ?
+ABONDANCE_B <- t(SB) / sommeB # We use the effectives of the reads per EPO and taxonomic group and divide it by the total number of reads per EPO
+
+# Getting to know the dimensions of the newly created tables
+dim (ABONDANCE_A)
+dim (ABONDANCE_B)
+
+# As we took the transposed matrix of SA/SB, we have to re-attribute the names of the columns to the lines
+rownames(ABONDANCE_A) <- colnames(SA)
+rownames(ABONDANCE_B) <- colnames(SB)
+
+# Here, we plot the distribution of the abundances of EPOs for each cluster/taxonomic group. As the two tables do not have the same number of columns, we have to use two loops (one for table A and one for table B)
+par(mfrow = c(5,5)) # Defining parameter to have 5 graph windows
+for (i in seq_along(1:ncol(ABONDANCE_A))) {
+  name <- paste0("Distribution of the number of \nEPOs for cluster ", i, " in \ntable A") # Making a variable name to be able to recognize the plot
+  hist(ABONDANCE_A[, i], main = name, xlab = "Abundance") # Plot of the column i in the table A
+}
+par(mfrow = c(1, 1)) # Returning the parameter to normal
+
+par(mfrow = c(5, 5)) # Making a second 5*5 window so the plots in the tables don't get mixed up
+for(i in seq_along(1:ncol(ABONDANCE_B))) {
+  name <- paste0("Distribution of the number \nof EPOs for \ntaxonomic group ", i, " in table B") # Making a variable name to be able to recognize the plot
+  hist(ABONDANCE_B[, i], main = name, xlab = "Abundance")  # Plot of the column i in the table A
+}
+par(mfrow = c(1, 1)) # Returning the parameter to normal
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(name, sommeA, sommeB, i)
+dev.off()
+```
+
+# Analysis on the Abundance
+
+## Scaled PCA
+
+```{r}
+# Making a PCA on the number of EPOs per cluster/taxonomic group
+ACPA <- PCA(ABONDANCE_A, scale.unit = TRUE, ncp = 40, graph = TRUE) #PB: PK 40 AXES? CEST QUOI LA SCALE UNIT ?
+ACPB <- PCA(ABONDANCE_B, scale.unit = TRUE, ncp = 40, graph = TRUE)
+
+# Plotting the result of the PCA
+plot.PCA(ACPA, axes = c(1, 2), choix = "ind", habillage = 13) # PB: COMMENT ON CHOISIT L'HABILLAGE ? CHOIX ?
+plot.PCA(ACPB, axes = c(1, 2), choix = "ind", habillage = 2)
+
+# We take out the coordonates of each EPO in every dimesion of the 40 dimensions space in which the PCA is executed
+CO_ACPA <- as.data.frame(ACPA$ind$coord)
+CO_ACPB <- as.data.frame(ACPB$ind$coord)
+
+# We print the head of the eigenvalues to see if the variance - Covariance matrix is well spread
+head(ACPA$eig)
+head(ACPB$eig)
+```
+
+## Getting the heritability of the PCA data
+
+```{r}
+# We add two columns in each table of CO_ACP to have the number of the EPO and the number of the BLOC
+CO_ACPA$EPO <- sapply(strsplit(rownames(CO_ACPA), "[.]"), "[", 2)
+CO_ACPA$BLOC <- sapply(strsplit(rownames(CO_ACPA), "[.]"), "[", 3)
+CO_ACPB$EPO <- sapply(strsplit(rownames(CO_ACPB), "[.]"), "[", 2)
+CO_ACPB$BLOC <- sapply(strsplit(rownames(CO_ACPB), "[.]"), "[", 3)
+
+# We rename the columns of the dimensions in the columns to be able to use them more freely in the code
+names(CO_ACPA)[1:40] <- paste0("D", 1:40)
+names(CO_ACPB)[1:40] <- paste0("D", 1:40)
+
+# In this loop, we will calculate the genetic and environmental variance of the 40 dimensions in the table for each EPO
+RES_ACPA <- c()    # Initializing the vector that will be implemented with the values of the variance of table A
+RES_ACPB <- c()    # Initializing the vector that will be implemented with the values of the variance of table A
+for (i in 1:40) {
+  RES_ACPA <- c(RES_ACPA, c(i, Hdeux(CO_ACPA[,i], CO_ACPA)) )# At each passage, it uses the Hdeux function defined in the beginning and implements its output into the vector used for this
+  RES_ACPB <- c(RES_ACPB, c(i, Hdeux(CO_ACPB[,i], CO_ACPB)) )
+}
+
+# Changing the vectors into data frames so they can be treated more easily throughout the code
+RES_ACPA <- as.data.frame(matrix(RES_ACPA, ncol = 3, byrow = TRUE))
+RES_ACPB <- as.data.frame(matrix(RES_ACPB, ncol = 3, byrow = TRUE))
+
+# Naming the columns to manipulate them easily
+names(RES_ACPA) <- c("axe", "VG", "VE")
+names(RES_ACPB) <- c("axe", "VG", "VE")
+
+# Calculating the heritability of each dimension using the formula H² = VG/(VG + VE)
+RES_ACPA$H2 <- RES_ACPA$VG / (RES_ACPA$VG + RES_ACPA$VE)
+RES_ACPB$H2 <- RES_ACPB$VG / (RES_ACPB$VG + RES_ACPB$VE)
+
+# Plotting the heritability of the 40 axis to look at it
+plot(1:40, RES_ACPA$H2)
+plot(1:40, RES_ACPB$H2)
+
+# Filtering the axis for which the heritability is superior to 0.10
+liste_axe_ACPA <- which(RES_ACPA$H2 > 0.10)
+liste_axe_ACPB <- which(RES_ACPB$H2 > 0.10)
+
+# Plotting the coordinates of the EPOs on the heritable axis (H² > 0.10). As the two lists are not the same size, we have to make two distinct loops 
+par(mfrow = c(3, 3)) # Asking the plots to be in a 3*3 plotting space
+for (i in liste_axe_ACPA) {
+  boxplot(CO_ACPA[, i] ~ CO_ACPA$EPO, ylab = paste("Coordinates on axis", i), main = paste("Table A: coordinates according to \naxis" ,i))
+} # In this table, the interesting axis to explore are the 8 and 13 mainly
+for (i in liste_axe_ACPB) {
+  boxplot(CO_ACPB[, i] ~ CO_ACPB$EPO, ylab = paste("Coordinates on axis", i), main = paste("Table B: coordinates according to \naxis" ,i))
+} # In this table, the interesting axis to explore are the 23, 33 and 40
+par(mfrow = c(1, 1)) # Returning the parameter to normal
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(i)
+```
+
+# Calculating the BLUPS
+
+```{r}
+# This function will be calculating the BLUPS using the blups function defined at the beginning of the code file 
+
+# Here we initialize the data frame where we will be adding the blups in the loop in the next line
+BLUPSA <- data.frame() 
+BLUPSB <- data.frame()
+for (i in 1:40) { # We will be calculating blups for the 40 axis of the PCA PB: should we not use only the "good" ones ?
+  # Calculating the blups for each axis
+  bluA <- as.data.frame(blups(CO_ACPA[,i], CO_ACPA)) 
+  bluB <- as.data.frame(blups(CO_ACPB[,i], CO_ACPB))
+  # Naming all the columns as they were named before to be able to recognize them
+  names(bluA)[4] <- names(CO_ACPA)[i]
+  names(bluB)[4] <- names(CO_ACPB)[i]
+  if ((nrow(BLUPSA) == 0) & (nrow(BLUPSB) == 0)) { # Here we separate the first run of the loop from the others.In the fist run, the BLUPS data frame takes the value of the blups
+    BLUPSA <- bluA[,3:4] 
+    BLUPSB <- bluB[,3:4]
+  }else { # In the other cases, we merge the new values to the already existing data frame. They are merged because they are the same.
+    BLUPSA <- merge(BLUPSA, bluA[,3:4], by.x = "grp", by.y = "grp")  
+    BLUPSB <- merge(BLUPSB, bluB[,3:4], by.x = "grp", by.y = "grp")
+  }
+}
+
+# Here we take out the column that have null columns
+BLUPSA <- BLUPSA[, -c(1 + which(apply(BLUPSA[2:41], 2, var) == 0))] 
+BLUPSB <- BLUPSB[, -c(1 + which(apply(BLUPSB[2:41], 2, var) == 0))]
+
+# We name the first column EPO (up to here it represented the "group" by which it had been grouped in the loop)
+names(BLUPSA)[1] <- "EPO"  
+names(BLUPSB)[1] <- "EPO"
+
+# Saving the file of the acquired blups
+save(BLUPSA, file = "BLUPSA_ACP.Rdata")
+save(BLUPSB, file = "BLUPSB_ACP.Rdata")
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(i)
+```
+
+# Analysis on the OTUs
+
+## Making the data usable to do the analysis
+
+```{r}
+# Initializing the vectors that will be implemented with the heritability per OTU
+OTU_HERI_ACPA <- c()
+OTU_HERI_ACPB <- c()
+
+# Here we will make a histogram to take a look at the distribution of the squared cos of the PCA for each cluster/taxonomic group. As the column numbers are the same, we can do one loop considering the length of only one of the two tables.
+par(mfrow = c(3,3)) # Defining parameter to have 5 graph windows
+for (i in seq_along(1:ncol(ACPA$var$cos2))) {
+  # Making a variable name to be able to recognize the plot
+  nameA <- paste0("Distribution of the cos² \nfor cluster ", i, " in \ntable A") 
+  nameB <- paste0("Distribution of the cos² \nfor taxonomic group ", i, " in \ntable B")
+  
+  # Plot of the column i in the considered table
+  hist(ACPA$var$cos2[, i], main = nameA, xlab = "ACPA cos²") 
+  hist(ACPB$var$cos2[, i], main = nameB, xlab = "ACPB cos²")
+}
+par(mfrow = c(1, 1)) # Returning the parameter to normal
+dev.off() # Stopping the plotting process in the case the plots couldn't have been made. Otherwise, it blocks the process
+
+# Here, we use the list defined before in the code to select only the axis that are heritable. This is used to select the As the two lists are different, we will do two separate loops
+for (i in liste_axe_ACPA) {
+  OTU_HERI_ACPA <- c(OTU_HERI_ACPA, which(ACPA$var$cos2[, i] > 1e-1)) # We only select the data for which there is a 10% correlation between the axis PB: what does the cos² mean ?
+}
+for (i in liste_axe_ACPB) {
+  OTU_HERI_ACPB <- c(OTU_HERI_ACPB, which(ACPB$var$cos2[, i] > 1e-1))
+}
+
+# Eliminating all the double data in the OTU_HERI_ACP data set
+OTU_HERI_ACPA <- unique(OTU_HERI_ACPA)
+OTU_HERI_ACPB <- unique(OTU_HERI_ACPB)
+
+# Doing a PCA on the abundance of EPOs per cluster/taxonomic group taking into account only the heritable ones
+ACPHA <- PCA(ABONDANCE_A[,OTU_HERI_ACPA], scale.unit = TRUE, ncp = 40, graph = TRUE) 
+ACPHB <- PCA(ABONDANCE_B[,OTU_HERI_ACPB], scale.unit = TRUE, ncp = 40, graph = TRUE) 
+
+# Plotting the results of the PCA
+plot.PCA(ACPHA, aces = c(1, 2), choix = "ind", habillage = 13)  # PB: Pk on prend 13 ?
+plot.PCA(ACPHB, aces = c(1, 2), choix = "ind", habillage = 13)
+
+# Extracting the coordinates of the heritable axis from the first PCA
+CO_ACPHA <- as.data.frame(ACPHA$ind$coord)
+CO_ACPHB <- as.data.frame(ACPHB$ind$coord)
+
+# Renaming the row and columns to manipulate the data more easily
+## Row names
+CO_ACPHA$EPO <- sapply(strsplit(rownames(CO_ACPHA), "[.]"), "[", 2)
+CO_ACPHA$BLOC <- sapply(strsplit(rownames(CO_ACPHA), "[.]"), "[", 3)
+CO_ACPHB$EPO <- sapply(strsplit(rownames(CO_ACPHB), "[.]"), "[", 2)
+CO_ACPHB$BLOC <- sapply(strsplit(rownames(CO_ACPHB), "[.]"), "[", 3)
+## Columns
+names(CO_ACPHA)[1:40] <- paste0("D", 1:40)
+names(CO_ACPHB)[1:17] <- paste0("D", 1:17)
+
+# Calculating the heritability of the different axis of the PCA. We will do two loops because the two tables are not the same size
+RES_ACPHA <- c()
+for (i in 1:40) {
+  RES_ACPHA <- c(RES_ACPHA, c(i, Hdeux(CO_ACPHA[, i], CO_ACPHA)))
+}
+RES_ACPHB <- c()
+for (i in 1:17) {
+  RES_ACPHB <- c(RES_ACPHB, c(i, Hdeux(CO_ACPHB[, i], CO_ACPHB)))
+}
+
+# Transforming the tables into data frames that are more easily manipulable
+RES_ACPHA <- as.data.frame(matrix(RES_ACPHA, ncol = 3, byrow = TRUE))
+RES_ACPHB <- as.data.frame(matrix(RES_ACPHB, ncol = 3, byrow = TRUE))
+# Renaming the columns to be able to manipulate them more easily
+names(RES_ACPHA) <- c("axe", "VG", "VE")
+names(RES_ACPHB) <- c("axe", "VG", "VE")
+
+# Calculating the heritability of the PCA axis
+RES_ACPHA$H2 <- RES_ACPHA$VG / (RES_ACPHA$VG + RES_ACPHA$VE/2)   # PB: why is there a /2
+RES_ACPHB$H2 <- RES_ACPHB$VG / (RES_ACPHB$VG + RES_ACPHB$VE/2)   # PB: why is there a /2
+
+# Plotting the heritability of the data
+plot(1:40, RES_ACPHA$H2, xlab = "PCA axis", ylab = "Heritability")
+plot(1:17, RES_ACPHB$H2, xlab = "PCA axis", ylab = "Heritability")
+
+# Plotting the results of the PCA. We will do two different loops because the two data sets coming out of the PCA have different dimensions
+par(mfrow = c(5, 2))
+for (i in seq_along(1:40)) { # For table A
+  boxplot(CO_ACPHA[, i] ~ CO_ACPHA$EPO,xlab = "EPOs", ylab = paste0("Coordinates of D", i)) # Plotting the coordinates of the EPOs on the different axis of the PCA
+  hist(CO_ACPHA[, i], xlab = paste0("Coordinates of D", i), main = paste("Distribution of the coordinates of the EPOs on \naxis", i)) # Plotting the distribution of the coordinates of the EPOs on the different axis 
+}
+par(mfrow = c(1, 1)) # Returning the plot numbers to normal
+# Doing the same thing for table B
+par(mfrow = c(5, 2))
+for (i in seq_along(1:17)) {
+  boxplot(CO_ACPHB[, i] ~ CO_ACPHB$EPO,xlab = "EPOs", ylab = paste0("Coordinates of D", i)) 
+  hist(CO_ACPHB[, i], xlab = paste0("Coordinates of D", i), main = paste("Distribution of the coordinates of the EPOs on \naxis", i)) 
+}
+par(mfrow = c(1, 1))
+
+###############################################################################
+COH_OTU_ACPHA <- ACPHA$var$coord
+dim(COH_OTU_ACPH)
+head(COH_OTU_ACPH)
+
+clust <- hclust(dist(COH_OTU_ACPH), method = "ward.D2")
+plot(clust)
+
+labeuls <- A[OTU_HERI_ACP ,"Kingdom"]
+
+MEMBRES<- cbind(A[OTU_HERI_ACP,1:8],cutree(clust, k = 5) )    #Pourquoi de 1 à 8 ?
+names(MEMBRES)[ncol(MEMBRES)] <- "groupe"
+table(MEMBRES$groupe)
+
+table(MEMBRES$Kingdom, MEMBRES$groupe)
+table(paste(MEMBRES$Kingdom, MEMBRES$Phylum, sep="."), MEMBRES$groupe)
+table(MEMBRES$Class, MEMBRES$groupe)
+table(MEMBRES$Order, MEMBRES$groupe)
+table(MEMBRES$Family, MEMBRES$groupe)
+table(MEMBRES$Genus, MEMBRES$groupe)
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(i)
+```
+
+## Plotting the results depending on the OTUs
+
+```{r}
+clust <- hclust(dist(COH_OTU_ACPH), method = "ward.D2")
+labeuls <- A[OTU_HERI_ACP, "Kingdom"]
+
+color <- as.factor(A[OTU_HERI_ACP, "Phylum"])
+levels(color) <- viridis(nlevels(color)) 
+color <- as.character(color)
+
+dend <- as.dendrogram(clust)
+dend <- color_branches(dend, 5, col = c(1:5))
+plot(dend)
+
+dend %>% 
+  set("labels", labeuls) %>% 
+  set("labels_colors", color) %>% 
+  set("labels_cex", rep(0.3, nrow(COH_OTU_ACPH))) %>% 
+  plot()
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(i)
+```
+
+# Calculating the heredity per OTU
+
+```{r}
+ABONDANCE <- as.data.frame(ABONDANCE)
+
+ABONDANCE$EPO <- sapply(strsplit(rownames(ABONDANCE), "[.]"), "[", 2)
+ABONDANCE$BLOC <- sapply(strsplit(rownames(ABONDANCE), "[.]"), "[", 3)
+
+
+RES_OTU <- c()
+for (i in 1:(ncol(ABONDANCE)-1)) {
+  RES_OTU <- c(RES_OTU, c(i, Hdeux(ABONDANCE[,i], ABONDANCE)))       # Marche pas
+}
+
+stock <- RES_OTU
+
+tail(stock)
+
+RES_OTU <- as.data.frame(matrix(RES_OTU, ncol = 3, byrow = TRUE))
+
+names(RES_OTU) <- c("axe", "VG", "VE")
+tail(RES_OTU)
+
+RES_OTU$H2 <- RES_OTU$VG / (RES_OTU$VG + RES_OTU$VE)
+tail(RES_OTU)
+
+moyenne <- apply(ABONDANCE[,1:(ncol(ABONDANCE)-2)], 2, mean)
+length(moyenne)
+
+plot(RES_OTU$H2)
+hist(RES_OTU$H2)
+dim(RES_OTU)
+
+plot(log10(moyenne), RES_OTU$ H2)
+
+liste_otu <- which(RES_OTU$H2>0.4)
+RES_OTU[liste_otu,]
+
+for (i in liste_otu) {
+  boxplot(ABONDANCE[,i] ~ ABONDANCE$EPO)
+}
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(i)
+```
+
+# AFC analysis on the coordonates
+
+## Analysis
+
+```{r}
+hist(somme)
+
+dim(SA)
+res.ca = CA(SA, ncp = 40)
+
+# Sans les deux individus éliminés ça améliore de beaucoup les représentations
+CO <- res.ca$col$coord
+
+dim(CO)
+rownames(CO)
+
+# Il y a deux données bizarres mais pas quned elles sont éliminées
+
+# lignes qui nous ont servi à identifier les ratons laveurs
+# lignes qui nous ont servi a indentifier les ratons laveurs
+# which(CO[,1]==max(CO[,1]))
+# somme[which(CO[,1]==max(CO[,1]))]
+
+# which(CO[,2]==max(CO[,2]))
+# somme[which(CO[,2]==max(CO[,2]))]
+
+
+hist(CO[,1])
+hist(CO[,2])
+hist(CO[,3])
+hist(CO[,4])
+hist(CO[,5])
+
+plot(CO[,1], CO[,2])
+
+# Cleaning up after the use of local variables that won't be used later on to preserve your working environment memory
+rm(i)
+```
+
+## Heritability
+
+```{r}
+CO <- as.data.frame(CO)
+
+CO$EPO<-  sapply(strsplit(rownames(CO),"[.]"),"[",2)
+CO$BLOC<-sapply(strsplit(rownames(CO),"[.]"),"[",3)
+
+names(CO)[1:40] <- paste0("D", 1:40)
+
+names(CO)
+
+RES <- c()
+for (i in 1:40) {
+  RES <- c(RES, c(i, Hdeux(CO[,i], CO)))
+}
+
+RES <- as.data.frame(matrix(RES, ncol = 3, byrow = TRUE))
+
+names(RES) <- c("axe", "VG", "VE")
+
+RES$H2 <- RES$VG / (RES$VG +RES$VE)
+
+plot(1:40, RES$H2)
+
+# Les bacteries signifiantes par axe
+print.CA(res.ca)
+dim(res.ca$eig)
+
+# On construit un sous fichier avec les axes les plus héritables
+liste_axes <- which(RES$H2 > 0.1)
+
+# Les OTUs qui sont déterminants dans cette liste
+
+OTU_HERI <- c()
+
+for (i in liste_axes) {
+  OTU_HERI <- c(OTU_HERI, which(res.ca$row$cos2[, i] > 1e-1))
+}
+
+OTU_HERI <- unique(OTU_HERI)
+
+SAH <- SA[OTU_HERI, ]
+
+res.caH <- CA(SAH, ncp = 40)
+
+COH <- res.caH$col$coord
+
+hist(COH[, 1])
+hist(COH[, 2])
+hist(COH[, 3])
+hist(COH[, 4])
+hist(COH[, 5])
+
+plot(COH[, 1], COH[, 2])
+
+
+```
+
+## Heritability
+
+```{r}
+COH <- as.data.frame(COH)
+
+COH$EPO<-  sapply(strsplit(rownames(COH),"[.]"),"[",2)
+COH$BLOC<-sapply(strsplit(rownames(COH),"[.]"),"[",3)
+
+names(COH)[1:40] <- paste0("D", 1:40)
+
+RESH <- c()
+for (i in 1:40) {
+  RESH <- c(RESH, c(i, Hdeux(COH[, i], COH)))
+}
+
+RESH <- as.data.frame(matrix(RESH, ncol = 3, byrow = TRUE))
+
+names(RESH) <- c("axe", "VG", "VE")
+
+RESH$H2 <- RESH$VG / (RESH$VG + RESH$VE)
+
+plot(1:40, RESH$H2)
+
+# l'axe 4 explose le score
+
+# Comment se clusterisent les OTUs
+
+COH_OTU <- res.caH$row$coord
+
+dim(COH_OTU)
+
+clust <- hclust(dist(COH_OTU), method = "ward.D2")
+plot(clust)
+
+labeuls <- A[OTU_HERI, "Family"]
+
+MEMBRES <- cbind(A[OTU_HERI, 1:8], cutree(clust, k = 4))
+names(MEMBRES)[ncol(MEMBRES)] <- "groupe"
+table(MEMBRES$groupe)
+
+table(MEMBRES$Kingdom, MEMBRES$groupe)
+table(paste(MEMBRES$Kingdom,MEMBRES$Phylum,sep="."), MEMBRES$groupe)
+table(MEMBRES$Class, MEMBRES$groupe)
+table(MEMBRES$Order, MEMBRES$groupe)
+table(MEMBRES$Family, MEMBRES$groupe)
+table(MEMBRES$Genus, MEMBRES$groupe)
+
+
+```
+
+## Plotting the results
+
+```{r}
+clust <- hclust(dist(COH_OTU), method = "ward.D2")
+labeuls <- A[OTU_HERI, "Phylum"]
+
+color <- as.factor(A[OTU_HERI, "Phylum"])
+levels(color) <- viridis(nlevels(color))
+color <- as.character(color)
+
+dend <- as.dendrogram(clust)
+dend <- color_branches(dend, 4, col = c(1:4))
+
+dend %>%
+  set("labels", labeuls) %>%
+  set("labels_color", color) %>%
+  set("labels_cex", rep(0.3,nrow(COH_OTU))) %>%
+  plot()
+```
+
+# GWAS
+
+## Genotypes
+
+### Position des SNP
+
+Il faudrait prendre le fichier SNP physical positions of SNP on th Zavitan WEW2 version
+
+```{r}
+file <- load("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Jacques/Jacques_project_bacteria/BREEDWHEAT_on_durum_physic_Svevo1.Rdata")
+dim(BLAST)
+```
+
+### Matrice de génotypage
+
+```{r}
+# Breed wheat genotypes
+SG <- as.data.frame(data.table::fread("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Jacques/Jacques_project_bacteria/SG_EPO_complet.csv"))
+```
+
+Il faut remettre le rownames et virer la premiere colonne et remettre en matrice
+
+```{r}
+rownames(SG) <- as.character(SG[, 1])
+SG <- SG[, -1]
+SG[1,1:10]
+dim(SG)
+```
+
+optional: keep SNPs only with an assumed physical position
+
+```{r}
+liste <- which(colnames(SG) %in% BLAST[, 1])
+length(liste)
+SG <- SG[, liste] # Et ça ?
+dim(SG)
+
+SG <- SG[ - which(rownames(SG)=="TT04DD79_27"), ]
+```
+
+Keep genotypes only if phenotyped
+
+```{r}
+liste_geno <- sapply(strsplit(rownames(SG), "_"), "[", 2)
+
+SG <- SG[which(liste_geno %in% as.character(BLUPS$EPO)), ]
+
+rownames(SG) <- sapply(strsplit(rownames(SG), "_"), "[", 2)
+dim(SG)
+
+```
+
+Il faut que genot soit une matrice
+
+```{r}
+
+genot <- (SG)
+class(genot)
+dim(genot)
+
+noms <- rownames(genot)
+genot <- apply(genot, 2, as.numeric)
+dim(genot)
+rownames(genot) <- noms
+genot <- as.matrix(genot)
+dim(genot)
+genot.imp <- apply(genot, 2, function(x) {
+  freq <- table(x)
+  x[is.na(x)] <- as.integer(names(which.max(freq)))
+  return(x)
+})
+## Allelic frequencies and filtering on MAF
+dim(genot)
+p <- colMeans(genot.imp) / 2
+q <- 1 - p
+```
+
+```{r maf, fig.height = 4.5, fig.width = 5.5}
+maf <- apply(cbind(p,q), 1, min)
+hist(maf, col = "grey", main = "", breaks = 50, xlim = c(0,0.5)) 
+
+```
+
+```{r maf filter}
+sum(maf < 0.5)
+genot.ok <- genot.imp[, maf >= 0.05]
+dim(genot.ok)
+```
+
+### Physical map
+
+```{r import map}
+map <- BLAST[which(BLAST[, 1] %in% colnames(genot.ok)), c(1, 2, 6)]
+names(map) <- c("SNP", "Chr", "Pos")
+head(map)
+
+class(map)
+dim(map)
+
+```
+
+Filtre sur les SNP conservés
+
+```{r map filter}
+map <- map[map$SNP %in% colnames(genot.ok), ] # Take out to see
+
+map[, 2] <- as.numeric(plyr::mapvalues(map[, 2], from = c("Un", "1A", "1B", "2A", "2B", "3A", "3B", "4A", "4B", "5A", "5B", "6A", "6B", "7A", "7B"), to = c("15", 1:14)))
+
+dim(map)
+summary(map)
+head(map)
+tail(map)
+
+```
+
+### Sorting by chromosome and position
+
+```{r map sort}
+map <- map[order(map$Pos), ]
+map <- map[order(map$Chr), ]
+head(map)
+tail(map)
+```
+
+### Cleaning
+
+```{r clean genot}
+rm(genot, genot.imp, maf, p, q)
+
+```
+
+## Choix de la variable à analyser
+
+La variable importante est placée dnas la variable y
+
+### Préparation du vecteur phénotype
+
+```{r import phenot}
+names(BLUPS)
+rownames(BLUPS) <- BLUPS[, 1]
+BLUPS <- BLUPS[, -1]
+
+i <- 4
+y <- BLUPS[, i]
+names(BLUPS)[i]
+
+# Passage des noms
+names(y) <- rownames(BLUPS)
+which(is.na(names(y)))
+names(y)[100:110]
+which(!(names(y) %in% rownames(SG)))
+names(y)[102]
+y <- y[-102]
+
+```
+
+```{r phenot hist, fig.height = 4.5, fig.width = 5.5}
+hist(y, col = "grey", nclass = 20, xlab = "BLUP", main = paste("Distribution of ", names(BLUPS)[i]))
+
+```
+
+## Data check
+
+```{r plot match, fig.height = 4.5, fig.width = 4.5}
+# Tri des génotypes pour qu'ils soient dans le même ordre
+genot.ok <- genot.ok[order(rownames(genot.ok)), ]
+y <- y[order(names(y))]
+
+genot.loop <- genot.ok
+
+# COmmme il peut y avoir des données phénotypiques manquantes, 
+
+if (length(which(is.na(y))) > 0) {
+  liste <- which(is.na(y))
+  y <- y[ - liste, ]
+  # rownames(genot.loop) <- rownames(genot.ok)[-which(is.na(y))]
+}
+# On vérifie que les deux fichiers sont dans le même ordre et qu'il y en a autant, ça doit faire unne droite
+plot(match(rownames(genot.loop), names(y)))
+
+# Tri des marqueurs pour qu'ils soient dans l'ordre de la carte. Ne pas le faire pour avoir tous les marqueurs
+genot.loop <- genot.loop[, map$SNP]
+plot(match(map$SNP, colnames(genot.loop)))
+
+```
+
+## Calcul de la matrice de Kinship
+
+```{r plot match, fig.height = 4.5, fig.width = 4.5}
+# Clacul de la matrice d'apparentement
+
+p <- colMeans(genot.loop) / 2
+q <- 1 - p
+
+# Ici, ça sera une Van Raden
+genot.scaled <- scale(genot.loop, center = 2 * p, scale = sqrt(2 * p * q))
+
+K <- tcrossprod(genot.scaled) / ncol(genot.scaled)
+K <- lqmm::make.positive.definite(K)
+
+hist(K)
+
+```
+
+## La régression
+
+On prend une approche de régression multiple proposée par V. Segura. On peut aussi faire avec d'autres packages.
+
+```{r plot match, fig.height = 4.5, fig.width = 4.5}
+dim(genot.loop)
+# Avec thresh : modèle optimal le meilleur (un peu moins conservatif que bonferroni)
+length(y)
+names(y)
+match(names(y), rownames(genot.scaled))
+dim(genot.scaled)
+dim(K)
+
+res_mlmm <- mlmm_allmodels(y, list(genot.scaled), list(K), 
+                               maxsteps = 4, threshold=1e-4)
+
+res_mlmm$step_table
+
+```
+
+```{r}
+# manhattan plot without map
+manhattan.plot(res_mlmm, main="Manhattan plot of the p-values for all markers", cex.main=0.55)
+
+```
+
+## GWAS for all the BLUPS
+
+```{r manhattan plot}
+for (i in 1:ncol(BLUPS)) {
+  print(i)
+  y <- BLUPS[, i]
+  names(BLUPS)[i]
+
+# Passage des noms
+  names(y) <- rownames(BLUPS)
+  y <- y[-102]
+#hist(y, col = "grey", nclass = 20, xlab = "BLUP", main = paste("Distribution of ", names(BLUPS)[i]))
+# Tri des génotypes pour qu'ils soient dans le même ordre
+  genot.ok <- genot.ok[order(rownames(genot.ok)), ]
+  y <- y[order(names(y))]
+
+  genot.loop <- genot.ok
+
+# COmmme il peut y avoir des données phénotypiques manquantes, 
+
+  if (length(which(is.na(y))) > 0) {
+    liste <- which(is.na(y))
+    y <- y[ - liste, ]
+  # rownames(genot.loop) <- rownames(genot.ok)[-which(is.na(y))]
+  }
+# On vérifie que les deux fichiers sont dans le même ordre et qu'il y en a autant, ça doit faire unne droite
+#plot(match(rownames(genot.loop), names(y)))
+
+# Tri des marqueurs pour qu'ils soient dans l'ordre de la carte. Ne pas le faire pour avoir tous les marqueurs
+  genot.loop <- genot.loop[, map$SNP]
+#plot(match(map$SNP, colnames(genot.loop)))
+  p <- colMeans(genot.loop) / 2
+  q <- 1 - p
+
+# Ici, ça sera une Van Raden
+  genot.scaled <- scale(genot.loop, center = 2 * p, scale = sqrt(2 * p * q))
+
+  K <- tcrossprod(genot.scaled) / ncol(genot.scaled)
+  K <- lqmm::make.positive.definite(K)
+
+#hist(K)
+  dim(genot.loop)
+# Avec thresh : modèle optimal le meilleur (un peu moins conservatif que bonferroni)
+  res_mlmm <- mlmm_allmodels(y, list(genot.scaled), list(K), 
+                               maxsteps = 4, threshold=1e-4)
+
+  res_mlmm$step_table
+  manhatt <- manhattan.plot(res_mlmm, main=paste("Manhattan plot of the p-values for all markers on the EPO", i, "without any data modification"), cex.main=0.55)
+  manhatt
+  dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the EPO ", i, " without any data modification.png"), width = 600)
+
+}
+```
+
+Valeurs pour i qui font apparaitre un QTL - 2 (pour avant 20000 --\> joli) - 4 (pour après 60000 et pseudoh = 0 --\> meilleur) - 6 (même que 2) - 10 (pour après 60000 --\> joli) - 12 (pour envrion 40000 --\> pas hyper joli mais ça va) - 18
+
+## Sans cofacteur
+
+```{r manhattan mlmm step 1, fig.height = 4, fig.width = 8}
+mlmm.gwas::plot_fwd_GWAS(x = mygwas, step = 1, snp_info = map, pval_filt = 0.1)
+
+res_mlmm <- mygwas
+
+# Manhattan plot avec carte
+
+mip <- map
+mip$Chr <- sprintf("%2d", mip$Chr)
+
+```
+
+## Step 2: 1 cofacteur
+
+```{r manhattan mlmm step 2, fig.height= 4,  fig.width= 8}
+plot_fwd_GWAS(x = mygwas, step = 2, snp_info = map, pval_filt = 0.1)
+```
+
+## Step 3: 2 cofacteurs
+
+```{r manhattan mlmm step 3, fig.height= 4, fig.width= 8}
+plot_fwd_GWAS(x = mygwas, step = 3, snp_info = map, pval_filt = 0.1)
+```
+
+## Etc ...
+
+```{r}
+plot_fwd_GWAS(x = mygwas, step = 5, snp_info = map, pval_filt = 0.1)
+
+```
+
+```{r}
+plot_fwd_GWAS(x = mygwas, step = 10, snp_info = map, pval_filt = 0.1)
+```
+
+# Meilleur modèle selon le critère "mbonf"
+
+```{r plot mbonf, fig.height = 4.5, fig.width = 5.5}
+plot_step_table(mygwas, "maxpval")
+```
+
+```{r manhattan mlmm step 5, fig.height = 4, fig.width = 8}
+plot_opt_GWAS(x = mygwas, opt = "mbonf", snp_info = map, pval_filt = 0.1)
+plot_opt_GWAS(x = mygwas, opt = "thresh", snp_info = map, pval_filt = 0.1)
+
+mygwas$opt_thresh
+
+mygwas$RSSout
+```
