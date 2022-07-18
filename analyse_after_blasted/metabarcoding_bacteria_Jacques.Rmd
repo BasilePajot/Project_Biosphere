@@ -1215,26 +1215,6 @@ BLUPSJF <- BLUPSJF %>%
 ## Calculating the Kinship matrix
 
 ```{r plot match, fig.height = 4.5, fig.width = 4.5}
-i<-1
-y <- BLUPSA[,i]
-names(BLUPSA)[i]
-names(y) <- rownames(BLUPSA)
-hist(y, col = "grey",  nclass=20, xlab = "BLUP ", main=paste("Distribution of", names(BLUPSA)[i]))
-genot.okA<-genot.okA[order(rownames(genot.okA)),]
-y<-y[order(names(y))]
-genot.loop<-genot.okA
-if (length(which(is.na(y)))>0 ) { 
-  liste<- which(is.na(y))
-  y <- y[-liste] 
-  genot.loop<-genot.loop[-liste,]
-  #rownames(genot.loop)<-rownames(genot.ok)[-which(is.na(y))]
-}
-plot(match(rownames(genot.okA), names(y))) # le résultat de ça c'est pourri
-genot.loop<-genot.loop[,mapA$SNP]
-plot(match(mapA$SNP, colnames(genot.loop)))
-
-
-
 # Calculating the allelic frequencies
 pA <- colMeans(genot.okA) / 2
 pJA <- colMeans(genot.okJA) / 2
@@ -1271,98 +1251,137 @@ dim(KJA)
 dim(KJF)
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Doing the GWAS for all the BLUPS and all the filtering techniques
 
-### GWAS for all the BLUPS
+### GWAS for all the BLUPS of table A
 
 ```{r manhattan plot}
 for (i in 1:ncol(BLUPSA)) {
+  # Verification to see if i is becoming bigger at each loop
   print(i)
-  i <- 1
+  # Attribution of the BLUPS column i to a variable that we will be using here
   y <- BLUPSA[, i]
-  names(BLUPSA)[i]
-
-# Passage des noms
+  # Taking the rownames
   names(y) <- rownames(BLUPSA)
+  # Suppressing the number 102 that fabricates some mistakes in the plots
   y <- y[-102]
-#hist(y, col = "grey", nclass = 20, xlab = "BLUP", main = paste("Distribution of ", names(BLUPS)[i]))
-# Tri des génotypes pour qu'ils soient dans le même ordre
+  # Ordering the two vectors so that they are in the same order
   genot.ok <- genot.okA[order(rownames(genot.okA)), ]
   y <- y[order(names(y))]
 
-  genot.loop <- genot.okA
+  genot.loop <- genot.ok
 
-# COmmme il peut y avoir des données phénotypiques manquantes, 
-
+  #  Taking out the possible missing values in the y vector if there are any
   if (length(which(is.na(y))) > 0) {
     liste <- which(is.na(y))
     y <- y[ - liste, ]
-  # rownames(genot.loop) <- rownames(genot.ok)[-which(is.na(y))]
   }
-
-  # On vérifie que les deux fichiers sont dans le même ordre et qu'il y en a autant, ça doit faire unne droite
-
-# Tri des marqueurs pour qu'ils soient dans l'ordre de la carte. Ne pas le faire pour avoir tous les marqueurs
+  # Sorting out the markers to have all the ones that are present on the map. Do not execute this line to have all the markers
   genot.loop <- genot.loop[, mapA$SNP]
+  # Calculating allelic frequencies
   p <- colMeans(genot.loop) / 2
   q <- 1 - p
-
-# Ici, ça sera une Van Raden
+  # Scaling the genotype matrix using a Van Raden method
   genot.scaled <- scale(genot.loop, center = 2 * p, scale = sqrt(2 * p * q))
-
-  K <- tcrossprod(genot.scaled) / ncol(genot.scaled)
-  K <- lqmm::make.positive.definite(K)
-
-  dim(genot.loop)
-# Avec thresh : modèle optimal le meilleur (un peu moins conservatif que bonferroni)
-  res_mlmm <- mlmm_allmodels(y, list(genot.scaled), list(K), 
-                               maxsteps = 4, threshold=1e-4)
-
-  res_mlmm$step_table
-  manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = map, steps = 1, hideCofactors = FALSE,
-chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSA)[i]))
+  # With the thresh : we select the best model which is a little bit less conservative that the Benferroni model
+  res_mlmm <- mlmm_allmodels(y, list(genot.scaled), list(KA), maxsteps = 4, threshold=1e-4)
+  # Making a Manhattan plot of the mixed model used before
+  manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = mapA, steps = 1, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSA)[i], "on table A"))
+  # Printing it with a line showing the threshold to determine where to stop
   manhatt
-  dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the EPO ", i, " without any data modification.png"), width = 600)
-
+  abline(h = 5, col = "red")
+  # Saving the graph
+  dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the axis ",  names(BLUPSA)[i], " of the AFC for table A.png"), width = 600)
 }
 ```
 
-Valeurs pour i qui font apparaitre un QTL - D21; D28
+Axes qui ont un QTL - D10; D17; D38; D40
+
+### GWAS for all the BLUPS of table JA
+
+```{r manhattan plot}
+for (i in 1:ncol(BLUPSJA)) {
+  # Verification to see if i is becoming bigger at each loop
+  print(i)
+  # Attribution of the BLUPS column i to a variable that we will be using here
+  y <- BLUPSJA[, i]
+  # Taking the rownames
+  names(y) <- rownames(BLUPSJA)
+  # Suppressing the number 102 that fabricates some mistakes in the plots
+  y <- y[-102]
+  # Ordering the two vectors so that they are in the same order
+  genot.ok <- genot.okJA[order(rownames(genot.okJA)), ]
+  y <- y[order(names(y))]
+
+  genot.loop <- genot.ok
+
+  #  Taking out the possible missing values in the y vector if there are any
+  if (length(which(is.na(y))) > 0) {
+    liste <- which(is.na(y))
+    y <- y[ - liste, ]
+  }
+  # Sorting out the markers to have all the ones that are present on the map. Do not execute this line to have all the markers
+  genot.loop <- genot.loop[, mapJA$SNP]
+  p <- colMeans(genot.loop) / 2
+  q <- 1 - p
+  # Scaling the genotype matrix using a Van Raden method
+  genot.scaled <- scale(genot.loop, center = 2 * p, scale = sqrt(2 * p * q))
+  # With the thresh : we select the best model which is a little bit less conservative that the Benferroni model
+  res_mlmm <- mlmm_allmodels(y, list(genot.scaled), list(KJA), maxsteps = 4, threshold=1e-4)
+  # Making a Manhattan plot of the mixed model used before
+  manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = mapJA, steps = 1, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSJA)[i], "on table JA"))
+  # Printing it with a line showing the threshold to determine where to stop
+  manhatt
+  abline(h = 5, col = "red")
+  # Saving the graph
+  dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the axis ",  names(BLUPSJA)[i], " of the AFC for table JA.png"), width = 600)
+}
+```
+
+Axes qui ont un QTL - D
+
+### GWAS for all the BLUPS of table JF
+
+```{r manhattan plot}
+for (i in 1:ncol(BLUPSJF)) {
+  # Verification to see if i is becoming bigger at each loop
+  print(i)
+  # Attribution of the BLUPS column i to a variable that we will be using here
+  y <- BLUPSJF[, i]
+  # Taking the rownames
+  names(y) <- rownames(BLUPSJF)
+  # Suppressing the number 102 that fabricates some mistakes in the plots
+  y <- y[-102]
+  # Ordering the two vectors so that they are in the same order
+  genot.ok <- genot.okJF[order(rownames(genot.okJF)), ]
+  y <- y[order(names(y))]
+
+  genot.loop <- genot.ok
+
+  #  Taking out the possible missing values in the y vector if there are any
+  if (length(which(is.na(y))) > 0) {
+    liste <- which(is.na(y))
+    y <- y[ - liste, ]
+  }
+  # Sorting out the markers to have all the ones that are present on the map. Do not execute this line to have all the markers
+  genot.loop <- genot.loop[, mapJF$SNP]
+  p <- colMeans(genot.loop) / 2
+  q <- 1 - p
+  # Scaling the genotype matrix using a Van Raden method
+  genot.scaled <- scale(genot.loop, center = 2 * p, scale = sqrt(2 * p * q))
+  # With the thresh : we select the best model which is a little bit less conservative that the Benferroni model
+  res_mlmm <- mlmm_allmodels(y, list(genot.scaled), list(KJF), maxsteps = 4, threshold=1e-4)
+  # Making a Manhattan plot of the mixed model used before
+  manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = mapJF, steps = 1, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSJF)[i], "on table JF"))
+  # Printing it with a line showing the threshold to determine where to stop
+  manhatt
+  abline(h = 5, col = "red")
+  # Saving the graph
+  dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the axis ",  names(BLUPSJA)[i], " of the AFC for table JF.png"), width = 600)
+}
+```
+
+Axes qui ont un QTL - D
 
 
 ```{r}
