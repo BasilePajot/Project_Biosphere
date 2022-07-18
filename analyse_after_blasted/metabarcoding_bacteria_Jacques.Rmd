@@ -1289,13 +1289,13 @@ for (i in 1:ncol(BLUPSA)) {
   manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = mapA, steps = 1, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSA)[i], "on table A"))
   # Printing it with a line showing the threshold to determine where to stop
   manhatt
-  abline(h = 5, col = "red")
+  abline(h = 5, col = "red", lwd = 2)
   # Saving the graph
   dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the axis ",  names(BLUPSA)[i], " of the AFC for table A.png"), width = 600)
 }
 ```
 
-Axes qui ont un QTL - D10; D17; D38; D40
+Axes qui ont un QTL - D10; D21; 
 
 ### GWAS for all the BLUPS of table JA
 
@@ -1332,7 +1332,7 @@ for (i in 1:ncol(BLUPSJA)) {
   manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = mapJA, steps = 1, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSJA)[i], "on table JA"))
   # Printing it with a line showing the threshold to determine where to stop
   manhatt
-  abline(h = 5, col = "red")
+  abline(h = 5, col = "red", lwd = 2)
   # Saving the graph
   dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the axis ",  names(BLUPSJA)[i], " of the AFC for table JA.png"), width = 600)
 }
@@ -1375,7 +1375,7 @@ for (i in 1:ncol(BLUPSJF)) {
   manhatt <- mlmm.gwas::manhattan.plot(res_mlmm, map = mapJF, steps = 1, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main = paste("Plot for axis", names(BLUPSJF)[i], "on table JF"))
   # Printing it with a line showing the threshold to determine where to stop
   manhatt
-  abline(h = 5, col = "red")
+  abline(h = 5, col = "red", lwd = 2)
   # Saving the graph
   dev.print(device = png, file = paste0("Manhattan plot of the p-values for all markers on the axis ",  names(BLUPSJA)[i], " of the AFC for table JF.png"), width = 600)
 }
