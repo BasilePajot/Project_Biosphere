@@ -1,0 +1,5 @@
+This directory contains the folders to do the post-sequencing analysis on the sequences.
+
+The first folder is called "code_results". It contains the sequences and the scripts to do the analysis plus all the results of the analysis. 
+
+The second folder is called "necessary_files_analysis". It conatins all the files that are necessary to run the analysis on the different sequences.
