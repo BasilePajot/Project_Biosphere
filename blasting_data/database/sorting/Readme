@@ -1,0 +1,9 @@
+This directory contains the elements allowing us to merge the databases from Arthemis and BOld. It also allows us to filter the data in these two databases on different paremeters.
+
+    The first file of this directory is called "Final_database.csv". It is the result of the code in this directory. It is the result of the merging of the two databases and the filtering of these databases. Do not try to open this document in your terminal or computer (if you are on VSCode), it is too large to be opened.
+
+    The second file is called "launcher_sort.sh". It is the file to use to launch the sorting of the database. It will in turn run the file called "script_sort.sh". As usual, it will run it in the clusters' background.
+
+    The third file is called "script_sort.sh". It is used to launch the "sorting_script.R".
+
+    The last file is the one called "sorting_script.R". It is an R script that downloads the two databases and allows to merge them and filter them.
