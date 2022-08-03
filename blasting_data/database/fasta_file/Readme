@@ -1,0 +1,5 @@
+This directrory contains a script and the results of this script. 
+
+    The script is called "fasta_file_constitution.sh". It takes as an argument the path to a database and is able to take out several files dependin on the way you choose to blast. The way it is commented, it is programed to take out a fasta file designed to do a local blast on the Arthemis database. But by playing with the comments, you can change it to do a local blast on the Bold database or to make several files to realise a qiime2 consensus blast by using a classifier designed on your database.
+
+    The other files are outputs of this script that are for different blasting techniques.
