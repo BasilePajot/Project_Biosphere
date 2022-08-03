@@ -1,0 +1,9 @@
+This directory contains all the scripts to make one big table containing all the data taken out of the Bold database. 
+
+    The first file is a database. It contains all the concatenated databases comming from Bold. It is a csv format file allowing it to be read easily by many different softwares.
+
+    The second file is the "launcher_concatenation.sh". Its role is to launch the concatenation script called "script_concat.sh". To lauch it, just write in your terminal "sbatch launcher_concatenation.sh". 
+
+    The third file is called "script_concat.sh". Its purpose is to extract a variable from the list of taxa to get and transmit it to the R script called "concat_script.R". The bash script also launches the R script. It requires the file called "All_orders_to_get.tsv" in the "constitution" directory.
+
+    The last script is "concat_script.R". It is an R script. It uses a loop to get all the tables from the "Orders" directory one after the other to concatenate them.
