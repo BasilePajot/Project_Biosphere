@@ -12,9 +12,8 @@ This project gives an overview of the analysis of environmental DNA extracted on
     Then, we make a classifier that will blast the data for us thanks to qiime2. This code is inspired from the qiime2 tutorial "Training feature classifiers with q2-feature-classifier" from the qiime2 website (https://docs.qiime2.org/2022.2/tutorials/feature-classifier/). This allow us to recognise the sequences in the biom table and compare it to the ones from the database to tell us which sequence blasts with which taxa. 
     In the end, we end up with a table giving us the number of variants of a taxa and how many times it has matched in the sequencing data set. 
     
-    We finaly didn't use this method because of too big differences in the obtained data so, we chose to do a local blast using the Ncbi local blasting method.
-    
-    In the end, we made a Genome Wide Analysis Study on several insects that are found in the last part of the repository.
+We finaly didn't use this method because of too big differences in the obtained data so, we chose to do a local blast using the Ncbi local blasting method.
+In the end, we made a Genome Wide Analysis Study on several insects that are found in the last part of the repository.
 
   
   Finaly, this project contains both Rscripts and Linux scripts. It has been coded to go on a cluster and be used accordingly. The memory requirements may be too important for some computers. 
