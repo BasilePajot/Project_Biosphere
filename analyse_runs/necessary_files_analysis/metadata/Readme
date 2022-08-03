@@ -1,0 +1,16 @@
+This direcory contains all the metadata files. It only has one file called "metadata.tsv". 
+
+This file looks as follow:
+
+project marqueur trunc-f trunc-r length
+
+20220711 HEX 186 186 322
+20220711 LEP 134 134 218
+20220711 HCO 182 182 313
+
+This file contains several informations that are given to the analysis. 
+ 1. First, the name of the project. This example contains the date of obtention of the sequences.
+ 2. The second information is the name of the considered marker. 
+ 3. The first number is the number of bp after which the cutadapt line in the script has to cut in the forward primer. It corresponds to the length of the primer.
+ 4. The second number gives the same information for the reverse primer.
+ 5. Finaly, the last number gives the length of the marker in bp.
