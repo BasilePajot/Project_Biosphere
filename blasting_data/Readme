@@ -1,0 +1,5 @@
+This directory contains two folders. Its purpose is to make a blasting database to use on the sequences.
+
+The fisrt folder is called constitution. It is used to download all the required information to make a blasting database. 
+
+The second folder is called database. It contains all the data that is downloaded thanks to the previous folder and all the codes to manipulate the downloaded information to make a functionnal database.
