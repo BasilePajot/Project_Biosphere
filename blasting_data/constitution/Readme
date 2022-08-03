@@ -1,0 +1,25 @@
+This directory contains all the files you need to make a database from the Bold Systems database (https://www.boldsystems.org/). It allows to make a local database of the wanted taxa. 
+
+The wanted taxa are given in two places for organisation and storing purposes, but only one of the two locations is necesarry for the code to run. 
+
+    The first file of the directory is the "All_orders_to_get.tsv" file. It contains a list of all the taxa to get from the online database. It looks like shown here: 
+
+                    Orders to consider
+
+                    Acanaloniidae
+                    Acanthocnemidae
+                    Acanthopteroctetidae
+                    Acanthosomatidae
+                    Acartophthalmidae
+                    Achilidae
+                    Aclerdidae...
+
+    This file is not necessary for the code to run, but it is nice to have a file in which you have a separate list of all the orders you want to obtain.
+
+    The second file of the directory is called "Orders_not_working(nosequence).tsv". It contains all the names of the taxa for which the download of the data did not work because they are not public sequences or there are no sequences in these branches in the online database. Its construction is similar to the previous file. It does not serve any purpose in the code. It is only kept as a tool to access the data that did not get downloaded.
+
+    The next file is the "launcher.sh". It is a bash file that is used to launch the R script allowing to get the data that is needed. To execute it, you just have to type in the terminal "sbatch launcher.sh" and the job will be launched.
+
+    The last file is the script that downloads all the required taxa. It is not a bash script, but an R script. This relies on the principle of a loop giving the name of the taxa we want and downloading it turn after turn. It is a very long job. Another problem of this script is that it stops when one of the given taxa does not work for any reason. It means that when you execute it, you should be close by to re-launch it in case it stops. 
+    I tried to shorten the time by making a loop using the "All_orders_to_get.tsv" file and using the name of the taxa as a variable to be able to launch this work on several CPUs at the same time. The problem is that the server launches all the jobs at the same time. This is blocked by BOLD Systems because considered as an attack on their system.
+    One promissing perspective would be to send the jobs 50 by 50 in the "#SBATCH" parameters using "array", but I didn't have time to implement this and try it out.
