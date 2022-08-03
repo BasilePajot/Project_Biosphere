@@ -1,0 +1,7 @@
+This directory contains everything that you need to do a GWAS of the data you had from the blasted data.
+
+First, the "comparative blasting method" file is used to compare the Ncbi, Bold and Arthemis results on the different databases and make comparative databases. 
+
+Then, the "Analyse_of_the_insect_database" file is used to use the transformed table from the previous file to make a Gwas with the data. The input of this file 
+must be a table with just one sceintific name and the justification of why this name. Contact me and I will be able to give you a preview of what the data is 
+supposed to look like. To be used.
