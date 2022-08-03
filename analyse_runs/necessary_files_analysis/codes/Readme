@@ -1,0 +1,6 @@
+In this directory, you will find the codes doing the analysis.
+
+    The first file is called "launcher.sh". It is used to launch the other bash script in this directory. The use of the different lines are explained in the script.
+    The launcher is used to launch the jobs in the cluster's background. It will launch three identical jobs with different variables allowing to treat several markers at once.
+
+    The second file of the directory is called "script_metabarcoding_publi.sh". It is the file that does all the analysis of the sequences that came out of the sequencer thanks to the qiime2 software. It is also anotated to be sure to understand what is happening.
