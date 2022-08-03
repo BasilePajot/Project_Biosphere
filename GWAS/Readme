@@ -4,4 +4,4 @@ First, the "comparative blasting method" file is used to compare the Ncbi, Bold 
 
 Then, the "Analyse_of_the_insect_database" file is used to use the transformed table from the previous file to make a Gwas with the data. The input of this file 
 must be a table with just one sceintific name and the justification of why this name. Contact me and I will be able to give you a preview of what the data is 
-supposed to look like. To be used.
+supposed to look like to be used.
