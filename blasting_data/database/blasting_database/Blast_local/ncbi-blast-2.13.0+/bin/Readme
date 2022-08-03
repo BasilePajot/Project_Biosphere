@@ -1,0 +1,6 @@
+This file contains all the data and codes necessary to make the Ncbi blast method on your data.
+
+There are many files that we don't want to touch. The only file that we want to modify to have our results is the one called "blaster.sh". This file contains the lines to make a conparative database with the fasta files we give (in this folder, they are called "fasta_file_arthemis_blast_local.fasta", "fasta_file_bold_blast_local.fasta" and "fasta_file_bold_and_arthemis_blast_local.fasta"). With this, the blaster script makes all the files in the beginning of the folder which names start with "bold", "arthemis", "bold_and_arthemis". THe second part of the script is used to compare the sequences you give to the script (here, they are called "HCO_sequences.fasta", "HEX_sequences.fasta", "LEP_sequences.fasta") to your database to give it names. 
+The results of this part of the script come out as csv tables.
+The different columns of these csv tables correspond to this list of indicators: 
+query.acc.ver; Taxonomy; identity; alignment length; number_mismatches; number_gaps; query.start; query.end; subject_start; subject_end; evalue; bitscore
