@@ -1,0 +1,8 @@
+This directory contains all the files that are necessary to run the code.
+
+    All the files were split into different directories for organisation purpose, but you have to put all the files in the same directory to be able to run the codes. 
+
+    There is no purpose in copying the Readme files in each directory. They are ust here to help you understand what every file is used for and how to use them. Copying them would be redundant and confusing.
+
+    To run the analysis, do not forget to copy everything in the final built directory onto the scratch before launching it there. 
+    Be careful, you don't want to leave it there because it will be destroyed after one month.
