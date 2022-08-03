@@ -1,0 +1,17 @@
+In this directory, we use the files that were made in the fasta_file folder and the results of the analysis of the sequences to attribute a name to the sequences. 
+
+This folder contains 5 files.
+
+    The first one is called "launcher_builder.sh". It is used to launch the "database_building.sh" script. The combination of these two files is to use the files produced in the "fasta_file" directory to build a classifier that is designed to attribute names to your sequences using the qiime2 feature classifer method.
+
+    The second file is called "launcher_user.sh". It is used to launch the "database.using.sh" script. The combination of these two scripts is supposed to use the classifier as well as the sequences and feature table obtained from the analysis in the "code_results" directory to give names to the sequences and add them to the feature table. But, we were unable to have conclusive results using this technique given the uncertainty of the blast method. This is why we chose to do a local blast using the codes in the "Blast_local" folder. 
+
+    The last file is the "metadata.tsv" file. It is used as a list of the markers to use in the using part of the blasting method.
+
+This folder also contains 4 sub-folders.
+
+    The "logs" and "err" folders are used respectively to store the outputs and the error messages of the scripts when they are launched.
+
+    The "try_bold_arthemis" folder contains classifiers as well as sequences and taxonomy data that was extracted from the three databases: BOld, Arthemis and the combination of the two. This data was produced by the "database_building.sh" script.
+
+    Finaly, the last file is called "Blast_local" file. It contains all the data and scripts that are used to make a local blast using the Ncbi method on your own data.
