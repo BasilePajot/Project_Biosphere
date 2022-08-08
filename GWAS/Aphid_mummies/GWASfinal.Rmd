@@ -1,0 +1,451 @@
+---
+title: "GWAS script JRL 2021"
+author: "C.LE BOUAR ; C.MELOT ; L.RIZZI"
+date: "20/06/2021"
+output: 
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+# Context
+Creation of the directory place 
+
+```{r setup, echo=TRUE, message=FALSE, results='hide', cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache.lazy = FALSE)
+
+#library("rstudioapi")   # mettre la directory en place
+#setwd(dirname(getActiveDocumentContext()$path)) # Set working directory to source file location
+#getwd()
+
+```
+
+```{r}
+rm(list = ls())
+
+library(anyLib)
+anyLib(c("data.table", "apercu", "mlmm.gwas", "corpcor","plyr"))
+library(stringr)
+
+```
+
+#Introduction
+The number of aphid mummies (terminal, living or both) are studied and the link with one or several SNP is observed. 
+##Model used
+
+BLUEs and BLUPs of the first statistical analysis were used to make a GWAS analysis. 
+Phenotypic values are modeled by this equation:
+
+$$Y=\mu + X \beta + Zu+ \epsilon$$
+ is the mean.
+Y contains phenotypic values.
+X gives the number of copies of the reference allele (for example A) . X could take the value 0 ( alleles aa) ; 1 (alleles aA) or 2 (alleles AA). 
+𝛽 is the regression slope that modifies the genotype according to the number of copies of the reference allele A. The genetic effect is modeled as fixed and additive. The null hypothesis H0 is 𝛽=0, which means that there is no genetic effect on phenotypic variation. 
+Z is a design matrix which assigns a multigenic effect to each line. It is equivalent to the sum of all additive effects of other genes that affect the studied character. 
+u is declared as a random effect, following a normal distribution of variance 2Kσ² where σ² is the additive polygenic variance of the character and K an apparent matrix between lines, calculated with markers. 
+𝜺 is the residual random of variance σ². 
+A stepwise analysis is calculated and significative markers were successively added to see if 𝜺  is reduced. There are 96 000 markers but they are not all independant. With an estimation of the number of independent markers and by application of the Bonferroni correction, the threshold of 10^-5 is taken. 
+First, a threshold for the allelic frequency is applied. Only allelic frequencies superior to 5% are kept. The apparent matrix K is calculated with the Van Raden method. The regression is calculated with the package mlmm.gwas of Rstudio. Manhattan plots are created and only the best model is kept. At the end, allelic effect and the number of each  class (00, 01, 11) is calculated. 
+
+
+
+##Genotype data
+###SNP location on chromosomes
+
+Markers located on the wheat genome are loaded. 
+
+
+```{r }
+# physical positions of SNP on the Zavitan WEW2 version
+load("../data/GENOTYPES/BREEDWHEAT_on_durum_physic_WEW2.Rdata")
+BLAST[1,]
+
+```
+
+Here it is possible to place 242 382 SNP on the wheat genom. 
+
+```{r }
+dim(BLAST)
+```
+
+
+```{r }
+# toutes les infos dispo sur les snp
+load("../data/GENOTYPES/caract_SNP_ALL_PHYS.Rdata")
+
+```
+
+## Genotypic matrix
+Lines was genotyped with a DNA chip on 420 000 SNP. But only a part of this data will be used. Usefull data are loaded here. 
+
+```{r }
+# breed wheat genotypes
+file="../data/GENOTYPES/SG_EPO_complet.Rdata"
+load(file)
+
+dim(SG)
+```
+There are 476 lines on 168 725 SNP
+
+Then only the SNP with an assumed physical position are kept.
+
+```{r }
+# optional Keep sNP only with an assumed physical position
+liste<-which(colnames(SG) %in% BLAST[,1])
+length(liste)
+ap(liste)
+
+SG<-SG[,liste]
+dim(SG)
+
+```
+
+
+# Phenotypes 
+## Data
+BLUPS and BLUE for total aphid mummies are loaded here
+
+```{r}
+file<-"../data/PHENOTYPES/BlueBlupS2.csv"
+
+myY  <-read.table(file, head = TRUE, sep=";", dec=",")
+myY<-filter(myY,blup<2,8)
+names(myY)[1]<-"Taxa"
+
+dim(myY)
+myY[1:10, 1]
+
+# modification of the data because of a spelling mistake. 
+myY[,1]<-str_replace(as.character(myY[,1]), "A", "4")
+
+```
+
+
+## Links between variable
+```{r}
+names(myY)
+pairs(myY[,c(2,3)])
+cor(myY[,c(2,3)])**2
+
+```
+BLUE and BLUPS are correlated.
+
+
+# Keep wheat lines only if phenotyped
+
+Here, we only keep the wheat lines that were phenotyped on the experiment field. 
+```{r}
+SG<-SG[which(rownames(SG) %in% myY[,1]),]
+ap(SG)
+dim(SG)
+```
+
+
+
+```{r}
+
+myY<-myY[which(myY[,1] %in% rownames(SG) ),]
+dim(myY)
+dim(SG)
+
+```
+To check of there is the same number of wheat lines in the selected genetic library (SG) as in our raw data (myY),the two number (dim(SG) and dim(myY)) have to be identical.
+
+## Data pretreatment
+```{r}
+genot<-SG
+
+class(genot)
+dim(genot)
+ap(genot)
+
+```
+
+
+### Imputation of Missing data 
+
+- simple binomial Imputation
+
+```{r na imp, cache = TRUE}
+
+noms<-rownames(genot)
+genot<-apply(genot,2,as.numeric)
+rownames(genot)<-noms
+
+genot.imp <- apply(genot, 2, function(x){
+  freq <- table(x)
+  x[is.na(x)] <- as.integer(names(which.max(freq)))
+  return(x)
+})
+
+```
+
+
+### Minimal allelic frequency
+
+
+```{r freqs}
+#Calcul of allelic frequency
+p <- colMeans(genot.imp) / 2
+q <- 1 - p
+```
+
+
+```{r maf, fig.height=4.5, fig.width = 5.5}
+#Spatial representation of allelic frequency
+maf <- apply(cbind(p, q), 1, min)
+hist(maf, col = "grey", main = "", breaks = 50, xlim = c(0, 0.5))
+```
+
+Only allelic frequencies superior to 5% are kept. 
+
+```{r maf filter}
+sum(maf < 0.5)
+genot.ok <- genot.imp[, maf >= 0.05]
+dim(genot.ok)
+```
+Only 64 713 markers are kept.
+
+
+### Physical map
+Creation of the physical map
+```{r import map}
+map<-BLAST[which(BLAST[,1] %in% colnames(genot.ok)),c(1,2,6)]
+names(map)<-c("SNP","Chr","Pos")
+head(map)
+
+```
+
+Only selected SNP are kept and chromosome are called by number between 1 and 14.
+
+SNP are classified according to their location on chromosome
+
+```{r map sort}
+map <- map[order(map$Pos), ]
+map <- map[order(map$Chr), ]
+head(map)
+tail(map)
+
+```
+
+ 
+```{r clean genot}
+#clean the memory
+rm(genot, genot.imp, maf, p, q)
+
+```
+
+
+# Choice of the analysed variable
+
+## Relation exploration
+The number 3 is choosen to take the BLUPs variables. 
+
+```{r}
+names(myY)
+#variable name i<-1
+# BLUP i<-3
+# BLUE i<-2
+i<-3
+
+```
+
+## Creation of the phenotype vector
+```{r import phenot}
+
+hist(myY[,i], main=paste("Distribution of", names(myY)[i]), xlab=colnames(myY)[i])
+
+y <- myY[,i]
+names(y) <- myY$Taxa
+summary(y)
+```
+
+# Data merge and vizualisation 
+
+## Data check 
+
+```{r plot match, fig.height=4.5, fig.width = 4.5}
+
+# genotype are put in the same order as the list of phenotypes in myY. 
+genot.ok<-genot.ok[order(rownames(genot.ok)),]
+y<-y[order(names(y))]
+genot.loop<-genot.ok
+
+# if they are missing data
+if (length(which(is.na(y)))>0 ) { 
+     liste<- which(is.na(y))
+     y <- y[-liste] 
+     genot.loop<-genot.loop[-liste,]
+     #rownames(genot.loop)<-rownames(genot.ok)[-which(is.na(y))]
+     }
+
+dim(genot.loop)
+```
+
+The two files must be in the same order and must create a straight line. 
+
+```{r plot match2, fig.height=4.5, fig.width = 4.5}
+plot(match(rownames(genot.loop), names(y)))
+
+# markers are putting in the same order in the map
+
+genot.loop<-genot.loop[,map$SNP]
+plot(match(map$SNP, colnames(genot.loop)), main= "Matching map between data from genot file and myY file", cex.main=0.55, xlab="myY index", ylab="genot index")
+```
+
+## Kinship matrix calcul
+
+### K Van Raden
+
+The apparent matrix of the model is calculated. The Van Raden method is used. 
+
+```{r , fig.height=4.5, fig.width = 4.5}
+# apparent matrix calcul
+p <- colMeans(genot.loop) / 2
+q <- 1 - p
+
+# The Van Raden matrix is centred
+genot.scaled <- scale(genot.loop, center = 2 * p, scale = sqrt(2 * p * q))
+
+K <- tcrossprod(genot.scaled) / ncol(genot.scaled)
+K <- make.positive.definite(K)
+```
+The K matrix gives the relation between two wheat lines. 
+
+```{r}
+#dimension of the matrix
+dim(K)
+```
+
+Here is the distribution of the values. Most lines have very low relatedness.
+
+```{r , fig.height=4.5, fig.width = 4.5}
+hist(K, main="Distribution of the relatedness contained in the K matrix", cex.main=0.55, xlab="Relatedness index")
+```
+
+# Regression
+The package mlmm.gwas. proposed by V.Segura and his co-workers is used. 
+## package mlmm.gwas
+```{r}
+# from https://cran.r-project.org/web/packages/mlmm.gwas/vignettes/gwas-manual.html
+
+# genotypes must be centered
+genot.scaled <- scale(genot.loop, center = 2 * p) 
+
+#In the function, y is the analysed phenotype ; K the Kinship matrix, genot.scaled is the matrix with X values (0,1 or 2) ; the threshold value controls the risk level; maxsteps gives the number of cofactor
+
+mygwas.gwas <- mlmm_allmodels(y, list(genot.scaled), list(K), 
+                               maxsteps = 4, threshold=1e-4)
+
+res_mlmm <- mygwas.gwas
+```
+
+P-values are calculated for the 4 models and for all markers. 
+A graph of -log10(Pvalues) for all markers is created. 
+
+```{r}
+# manhattan plot without map
+manhattan.plot(res_mlmm, main="Manhattan plot of the p-values for all markers", cex.main=0.55)
+```
+
+Here, two markers are above the threshold. 
+
+##Best model selection
+
+Then the best model is selected
+```{r}
+# model selection
+sel_XX = frommlmm_toebic(list(genot.scaled), res_mlmm)
+res_eBIC = eBIC_allmodels(y, sel_XX, list(K), ncol(genot.scaled))
+
+res_eBIC
+```
+The best model is the one with the smallest eBIC. 
+Here the model with the marker AX-89312681 has the smallest eBIC. It is significative. 
+
+The same significative results are obtained with the analysis of BLUES
+
+##Best model selection under a fixed treshold 
+The threshold is fixed at 1e-5: 
+```{r}
+res_threshold <- threshold_allmodels(threshold=1e-5, res_mlmm)
+res_threshold
+```
+
+The SNP AX-89312681 is the only one selected after we fixed the treshold at 1e-5. 
+
+## Manhattan plot with chromosom mapping 
+
+A manhattan plot map showing the distribution of p-values on the genome is created.
+
+```{r}
+mip<-map
+mip$Chr<-sprintf("%2d",mip$Chr)
+
+manhattan.plot(res_mlmm, map = mip, steps = 2, hideCofactors = FALSE, chrToPlot = "all", unit = "bp", main="Manhattan plot of the p-values for all markers", cex.main=0.55)
+```
+There is a peak on the chromosome 1B, for the SNP AX-89312681.
+
+#Visualization of allelic effects
+
+The allelic effect (slope value) is calculated
+```{r}
+sel_XXclass = fromeBICtoEstimation(sel_XX, res_eBIC, res_threshold)
+
+effects = Estimation_allmodels(y, sel_XXclass, list(K))
+effects
+```
+
+At the locus AX-89312681, the genotype 00(aa) has a difference of 0.9232 aphid mummies compared to the genotype 11(AA). 
+
+
+#Informations on the SNP selected
+```{r}
+#Identification of the SNP
+mark_list<-names(sel_XXclass)
+mark_list[1]
+```
+
+A boxplot showing the difference between the two homozygous is created. 
+```{r}
+# m is the number of the selected marker in the list
+m<-1
+genotypes.boxplot(genot.scaled, y , mark_list[m], effects)
+```
+
+The frequence of each class is calculated
+```{r}
+table(genot.loop[,mark_list[m]])
+```
+
+Allele 00 with more aphid mummies is uncommon. 
+
+
+
+```{r}
+map[which(map$SNP == mark_list[m]),]
+
+```
+
+##  Analysis of close markers
+
+
+```{r}
+C<-cor(genot.ok[,mark_list[m]], genot.ok)**2
+
+liste<-which(C>0.8)
+liste<-colnames(C)[liste]
+
+liste<-map[which(map$SNP %in% liste),]
+liste
+```
+
+
+## Effect of close loci
+```{r}
+genotypes.boxplot(genot.scaled, y , liste[2,1], effects)
+```
+
+
+
+
