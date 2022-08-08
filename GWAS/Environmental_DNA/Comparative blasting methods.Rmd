@@ -1,0 +1,1502 @@
+---
+title: "Comparative blasting methods"
+author: "Jacques_DAVID-Basile_PAJOT"
+date: '2022-07-20'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r}
+library(anyLib)  # This library allows you to import (if it is not already the case) and load all the selected libraries
+anyLib(c("plyr", "FactoMineR", "tidyverse", "dbplyr", "stringr", "ggplot2", "RColorBrewer", "VennDiagram"))
+```
+
+# Importing the feature tables that came out of the sequencing pipeline
+
+```{r}
+feature_table_HCO <- read.table("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/HCO_feature-table.csv", sep =";", header = TRUE, skip = 1)
+feature_table_HEX <- read.table("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/HEX_feature-table.csv", sep =";", header = TRUE, skip = 1)
+feature_table_LEP <- read.table("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/LEP_feature-table.csv", sep =";", header = TRUE, skip = 1)
+```
+
+# NCBI
+
+## Data importation
+
+```{r}
+res_blast_ncbi_HCO <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/matchs_ncbi_HCO.csv", sep = ";", header =TRUE)
+res_blast_ncbi_HEX <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/matchs_ncbi_HEX.csv", sep = ";", header =TRUE)
+res_blast_ncbi_LEP <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/matchs_ncbi_LEP.csv", sep = ";", header =TRUE)
+# Extracting the lists of the references to compare them with filtered data
+list_tot_HCO_ncbi <- levels(as.factor(res_blast_ncbi_HCO$query.acc.ver))
+list_tot_HEX_ncbi <- levels(as.factor(res_blast_ncbi_HEX$query.acc.ver))
+list_tot_LEP_ncbi <- levels(as.factor(res_blast_ncbi_LEP$query.acc.ver))
+# Filtering the data
+res_blast_ncbi_HCO_filtered <- res_blast_ncbi_HCO %>% 
+  filter(X..identity > 75,
+         alignment.length > 200)
+res_blast_ncbi_HEX_filtered <- res_blast_ncbi_HEX %>% 
+  filter(X..identity > 75,
+         alignment.length > 200)
+res_blast_ncbi_LEP_filtered <- res_blast_ncbi_LEP %>% 
+  filter(X..identity > 75,
+         alignment.length > 200)
+# Extracting the new list of the references after filtering
+list_filt_HCO_ncbi <- levels(as.factor(res_blast_ncbi_HCO_filtered$query.acc.ver))
+list_filt_HEX_ncbi <- levels(as.factor(res_blast_ncbi_HEX_filtered$query.acc.ver))
+list_filt_LEP_ncbi <- levels(as.factor(res_blast_ncbi_LEP_filtered$query.acc.ver))
+# Finding the missing pieces of the first table by comparing the two lists
+missing_HCO <- setdiff(list_tot_HCO_ncbi, list_filt_HCO_ncbi)
+missing_HEX <- setdiff(list_tot_HEX_ncbi, list_filt_HEX_ncbi)
+missing_LEP <- setdiff(list_tot_LEP_ncbi, list_filt_LEP_ncbi)
+# Cleaning up the environment to prevent it from being overloaded
+rm(missing_HCO, missing_HEX, missing_LEP, list_filt_HCO_ncbi, list_filt_HEX_ncbi, list_filt_LEP_ncbi, list_tot_HCO_ncbi, list_tot_HEX_ncbi, list_tot_LEP_ncbi, res_blast_ncbi_HCO_filtered, res_blast_ncbi_HEX_filtered, res_blast_ncbi_LEP_filtered)
+```
+
+## Finding the references to download from NCBI
+
+```{r}
+# Getting the non-duplicated references of each result (the best blast for the ncbi website)
+non_duplicated_HCO_ncbi <- res_blast_ncbi_HCO[which(!duplicated(res_blast_ncbi_HCO$query.acc.ver)),]
+non_duplicated_HEX_ncbi <- res_blast_ncbi_HEX[which(!duplicated(res_blast_ncbi_HEX$query.acc.ver)),]
+non_duplicated_LEP_ncbi <- res_blast_ncbi_LEP[which(!duplicated(res_blast_ncbi_LEP$query.acc.ver)),]
+```
+
+## Importing the downloaded taxonomic information
+
+```{r}
+sample_name_ncbi_HCO <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/samples_HCO.txt")
+sample_name_ncbi_HEX <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/samples_HEX.txt")
+sample_name_ncbi_LEP <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/samples_LEP.txt")
+```
+
+## Making a data frame out of the selected information in the taxonomic references
+
+```{r}
+# Making a list of the numbers of the arguments to extract from the taxonomic files
+ligne2_HCO <- seq(from = 2, to = length(sample_name_ncbi_HCO), by = 4)
+ligne4_HCO <- seq(from = 4, to = length(sample_name_ncbi_HCO), by = 4)
+ligne2_HEX <- seq(from = 2, to = length(sample_name_ncbi_HEX), by = 4)
+ligne4_HEX <- seq(from = 4, to = length(sample_name_ncbi_HEX), by = 4)
+ligne2_LEP <- seq(from = 2, to = length(sample_name_ncbi_LEP), by = 4)
+ligne4_LEP <- seq(from = 4, to = length(sample_name_ncbi_LEP), by = 4)
+# Extracting the previously selected arguments from the taxonomic file
+code_names_HCO <- data.frame(code = sample_name_ncbi_HCO[ligne4_HCO], taxo = sample_name_ncbi_HCO[ligne2_HCO])
+code_names_HCO <- code_names_HCO %>% 
+  mutate(code = str_split_fixed(code, " ", 2)[,1],
+         taxo = paste(str_split_fixed(taxo, " ", 4)[, 2], str_split_fixed(taxo, " ", 4)[, 3])) %>% 
+  as.data.frame()
+code_names_HEX <- data.frame(code = sample_name_ncbi_HEX[ligne4_HEX], taxo = sample_name_ncbi_HEX[ligne2_HEX])
+code_names_HEX <- code_names_HEX %>% 
+  mutate(code = str_split_fixed(code, " ", 2)[,1],
+         taxo = paste(str_split_fixed(taxo, " ", 4)[, 2], str_split_fixed(taxo, " ", 4)[, 3])) %>% 
+  as.data.frame()
+code_names_LEP <- data.frame(code = sample_name_ncbi_LEP[ligne4_LEP], taxo = sample_name_ncbi_LEP[ligne2_LEP])
+code_names_LEP <- code_names_LEP %>% 
+  mutate(code = str_split_fixed(code, " ", 2)[,1],
+         taxo = paste(str_split_fixed(taxo, " ", 4)[, 2], str_split_fixed(taxo, " ", 4)[, 3])) %>% 
+  as.data.frame()
+# Cleaning up the environment to prevent it from being overloaded
+rm(ligne2_HCO, ligne2_HEX, ligne2_LEP, ligne4_HCO, ligne4_HEX, ligne4_LEP, sample_name_ncbi_HCO, sample_name_ncbi_HEX, sample_name_ncbi_LEP)
+```
+
+## Merging the taxonomic data frames with the filtered blast results
+
+```{r}
+res_blast_ncbi_with_taxo_HCO <- merge(code_names_HCO, non_duplicated_HCO_ncbi, by.x = "code", by.y = "subject.acc.ver", all.x = TRUE, all.y = TRUE)
+res_blast_ncbi_with_taxo_HEX <- merge(code_names_HEX, non_duplicated_HEX_ncbi, by.x = "code", by.y = "subject.acc.ver", all.x = TRUE, all.y = TRUE)
+res_blast_ncbi_with_taxo_LEP <- merge(code_names_LEP, non_duplicated_LEP_ncbi, by.x = "code", by.y = "subject.acc.ver", all.x = TRUE, all.y = TRUE)
+# Cleaning up the environment to prevent it from being overloaded
+rm(code_names_HCO, code_names_HEX, code_names_LEP, non_duplicated_HCO_ncbi, non_duplicated_HEX_ncbi, non_duplicated_LEP_ncbi)
+```
+
+## Merging the feature tables with the results of the blast with the taxonomy
+
+```{r}
+# Merging the tables on the query.acc.ver
+res_blast_ncbi_and_feature_table_HCO <- merge(res_blast_ncbi_with_taxo_HCO, feature_table_HCO, by.x = "query.acc.ver", by.y = "OTU.ID", all.x = TRUE, all.y = TRUE)
+res_blast_ncbi_and_feature_table_HEX <- merge(res_blast_ncbi_with_taxo_HEX, feature_table_HEX, by.x = "query.acc.ver", by.y = "OTU.ID", all.x = TRUE, all.y = TRUE)
+res_blast_ncbi_and_feature_table_LEP <- merge(res_blast_ncbi_with_taxo_LEP, feature_table_LEP, by.x = "query.acc.ver", by.y = "OTU.ID", all.x = TRUE, all.y = TRUE)
+# Calculating the sum of reads per considered taxonomic level
+res_blast_ncbi_and_feature_table_HCO <- res_blast_ncbi_and_feature_table_HCO %>% 
+  mutate(somme = rowSums(.[14:ncol(res_blast_ncbi_and_feature_table_HCO)]))
+res_blast_ncbi_and_feature_table_HEX <- res_blast_ncbi_and_feature_table_HEX %>% 
+  mutate(somme = rowSums(.[14:ncol(res_blast_ncbi_and_feature_table_HEX)]))
+res_blast_ncbi_and_feature_table_LEP <- res_blast_ncbi_and_feature_table_LEP %>% 
+  mutate(somme = rowSums(.[14:ncol(res_blast_ncbi_and_feature_table_LEP)]))
+# Making a short version of the tables just above with the sums of the feature tables
+short_ncbi_HCO <- res_blast_ncbi_and_feature_table_HCO %>% 
+  select(c(taxo, X..identity, alignment.length, somme)) %>% 
+  arrange(-somme)
+short_ncbi_HEX <- res_blast_ncbi_and_feature_table_HEX %>% 
+  select(c(taxo, X..identity, alignment.length, somme)) %>% 
+  arrange(-somme)
+short_ncbi_LEP <- res_blast_ncbi_and_feature_table_LEP %>% 
+  select(c(taxo, X..identity, alignment.length, somme)) %>% 
+  arrange(-somme)
+# Cleaning up the environment to prevent it from being overloaded
+rm(res_blast_ncbi_with_taxo_HCO, res_blast_ncbi_with_taxo_HEX, res_blast_ncbi_with_taxo_LEP)
+```
+
+## Adding the lineage to the tables
+
+### Loading the taxonomy for the different markers
+
+```{r}
+reference_taxonomy_HCO_1 <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/taxonomy_result_HCO (1).xml")
+reference_taxonomy_HCO_2 <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/taxonomy_result_HCO.xml")
+reference_taxonomy_HEX <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/taxonomy_result_HEX.xml")
+reference_taxonomy_LEP <- read_lines("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/taxonomy_result_LEP.xml")
+```
+
+### Extracting the lineage and the names of the identified species
+
+```{r}
+phylogeny_HCO_1 <- reference_taxonomy_HCO_1[grep("<Lineage>", reference_taxonomy_HCO_1)]
+scientific_name_HCO_1 <- reference_taxonomy_HCO_1[grep("<ScientificName>", reference_taxonomy_HCO_1)]
+phylogeny_HCO_2 <- reference_taxonomy_HCO_2[grep("<Lineage>", reference_taxonomy_HCO_2)]
+scientific_name_HCO_2 <- reference_taxonomy_HCO_2[grep("<ScientificName>", reference_taxonomy_HCO_2)]
+phylogeny_HEX <- reference_taxonomy_HEX[grep("<Lineage>", reference_taxonomy_HEX)]
+scientific_name_HEX <- reference_taxonomy_HEX[grep("<ScientificName>", reference_taxonomy_HEX)]
+phylogeny_LEP <- reference_taxonomy_LEP[grep("<Lineage>", reference_taxonomy_LEP)]
+scientific_name_LEP <- reference_taxonomy_LEP[grep("<ScientificName>", reference_taxonomy_LEP)]
+# Cleaning up the environment to prevent it from being overloaded
+rm(reference_taxonomy_HCO_1, reference_taxonomy_HCO_2, reference_taxonomy_HEX, reference_taxonomy_LEP)
+```
+
+### Extracting the names we are interested in from the list of scientific names
+
+```{r}
+# All the names in the lineage are separated by ";". So by counting the number of ";", we can get the placement of the scientific names to get. So, we first make a list of the number of ";" separating the names in the lineage to get the relative position of the names
+list_numbers_names_HCO_1 <- lapply(phylogeny_HCO_1, function(x){str_count(x, ";")}) %>% 
+  unlist()
+list_numbers_names_HCO_2 <- lapply(phylogeny_HCO_2, function(x){str_count(x, ";")}) %>% 
+  unlist()
+list_numbers_names_HEX <- lapply(phylogeny_HEX, function(x){str_count(x, ";")}) %>% 
+  unlist()
+list_numbers_names_LEP <- lapply(phylogeny_LEP, function(x){str_count(x, ";")}) %>% 
+  unlist()
+# Then, we make the cumulative sum of this vector to get the positions of the names we are interested in
+cumulative_vector_names_HCO_1 <- c()
+cumulative_vector_names_HCO_1[1] <- c(1)
+for (i in 2:length(list_numbers_names_HCO_1)){ # We start at 2 to be sure that the first scientific name that appears is counted
+  cumulative_vector_names_HCO_1[i] <- list_numbers_names_HCO_1[i-1] + cumulative_vector_names_HCO_1[i-1] + 2
+}
+# Doing the same for the second list
+cumulative_vector_names_HCO_2 <- c()
+cumulative_vector_names_HCO_2[1] <- c(1)
+for (i in 2:length(list_numbers_names_HCO_2)){ # We start at 2 to be sure that the first scientific name that appears is counted
+  cumulative_vector_names_HCO_2[i] <- list_numbers_names_HCO_2[i-1] + cumulative_vector_names_HCO_2[i-1] + 2
+}
+cumulative_vector_names_HEX <- c()
+cumulative_vector_names_HEX[1] <- c(1)
+for (i in 2:length(list_numbers_names_HEX)){ # We start at 2 to be sure that the first scientific name that appears is counted
+  cumulative_vector_names_HEX[i] <- list_numbers_names_HEX[i-1] + cumulative_vector_names_HEX[i-1] + 2
+}
+cumulative_vector_names_LEP <- c()
+cumulative_vector_names_LEP[1] <- c(1)
+for (i in 2:length(list_numbers_names_LEP)){ # We start at 2 to be sure that the first scientific name that appears is counted
+  cumulative_vector_names_LEP[i] <- list_numbers_names_LEP[i-1] + cumulative_vector_names_LEP[i-1] + 2
+}
+# Extracting the names from the list of all the scientific names found before
+scientific_name_HCO <- c(scientific_name_HCO_1[cumulative_vector_names_HCO_1], scientific_name_HCO_2[cumulative_vector_names_HCO_2])
+scientific_name_HEX <- scientific_name_HEX[cumulative_vector_names_HEX]
+scientific_name_LEP <- scientific_name_LEP[cumulative_vector_names_LEP]
+# Keeping only the names and not the list of "<ScientificName>Nameofspecies</ScientificName>"
+scientific_name_epurated_HCO <- str_split_fixed(scientific_name_HCO, ">", 2)[, 2] %>% 
+  as.character() %>% 
+  str_split_fixed("<", 2) %>% 
+  as.data.frame %>% 
+  rename(scientific_names = V1) %>% 
+  select(scientific_names)
+scientific_name_epurated_HEX <- str_split_fixed(scientific_name_HEX, ">", 2)[, 2] %>% 
+  as.character() %>% 
+  str_split_fixed("<", 2) %>% 
+  as.data.frame() %>% 
+  rename(scientific_names = V1) %>% 
+  select(scientific_names)
+scientific_name_epurated_LEP <- str_split_fixed(scientific_name_LEP, ">", 2)[, 2] %>% 
+  as.character() %>% 
+  str_split_fixed("<", 2) %>% 
+  as.data.frame() %>% 
+  rename(scientific_names = V1) %>% 
+  select(scientific_names)
+# Cleaning up the environment to prevent it from being overloaded
+rm(i, list_numbers_names_HCO_1, list_numbers_names_HCO_2, cumulative_vector_names_HCO_1, cumulative_vector_names_HCO_2, scientific_name_HCO_1, scientific_name_HCO_2, scientific_name_HCO, list_numbers_names_HEX, cumulative_vector_names_HEX, scientific_name_HEX, list_numbers_names_LEP, cumulative_vector_names_LEP, scientific_name_LEP)
+```
+
+### Merging the lineage with the blast results and the feature table
+
+```{r}
+# First binding the two vectos containing the names and the lineage
+names_and_lineage_HCO <- cbind(scientific_name_epurated_HCO, Lineage = c(phylogeny_HCO_1, phylogeny_HCO_2))
+names_and_lineage_HEX <- cbind(scientific_name_epurated_HEX, Lineage = phylogeny_HEX)
+names_and_lineage_LEP <- cbind(scientific_name_epurated_LEP, Lineage = phylogeny_LEP)
+# Merging the two tables
+table_ncbi_HCO <- merge(names_and_lineage_HCO, res_blast_ncbi_and_feature_table_HCO, by.x = "scientific_names", by.y = "taxo", all.y = TRUE) %>% 
+  rename(Names_NCBI = scientific_names,
+         Identity_NCBI = X..identity,
+         Somme_reads = somme,
+         Taxonomy_NCBI = Lineage) %>% 
+  select(-c(mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score))
+# Hand adding the names that are missing (were not taken into account in the file)
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Amanita basii"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Fungi; Dikarya; Basidiomycota; Agaricomycotina; Agaricomycetes; Agaricomycetidae; Agaricales; Amanitaceae; Amanita</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Brachychthoniidae sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Chelicerata; Arachnida; Acari; Acariformes; Sarcoptiformes; Oribatida; Enarthronota; Brachychthonioidea; Brachychthoniidae; unclassified Brachychthoniidae</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Coelophora inaequalis"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Endopterygota; Coleoptera; Polyphaga; Cucujiformia; Coccinelloidea; Coccinellidae; Coccinellinae; Coccinellini; Coelophora</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Demetrias atricapillus"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Endopterygota; Coleoptera; Adephaga; Caraboidea; Carabidae; Lebiinae; Lebiini; Demetrias</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Mycocalicium subtile"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Fungi; Dikarya; Ascomycota; saccharomyceta; Pezizomycotina; leotiomyceta; Eurotiomycetes; Mycocaliciomycetidae; Mycocaliciales; Mycocaliciaceae; Mycocalicium</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Plagiopyxis callida"] <- "    <Lineage>cellular organisms; Eukaryota; Sar; Alveolata; Ciliophora; Intramacronucleata; Plagiopylea</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Pythium undulatum"] <- "    <Lineage>cellular organisms; Eukaryota; Sar; Stramenopiles; Oomycota; Pythiales; Pythiaceae</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Zasmidium cellare"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Fungi; Dikarya; Ascomycota; saccharomyceta; Pezizomycotina; leotiomyceta; dothideomyceta; Dothideomycetes; Dothideomycetidae; Mycosphaerellales; Mycosphaerellaceae; Zasmidium</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Dasybranchus sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Spiralia; Lophotrochozoa; Annelida; Polychaeta; Sedentaria; Scolecida; Capitellidae</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Gyraulus sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Spiralia; Lophotrochozoa; Mollusca; Gastropoda; Heterobranchia; Euthyneura; Panpulmonata; Hygrophila; Lymnaeoidea; Planorbidae</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Tetraspinus sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Chelicerata; Arachnida; Acari; Acariformes; Trombidiformes; Prostigmata; Eupodina; Eriophyoidea; Eriophyidae; Phyllocoptinae; Anthocoptini</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Thripidae sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Paraneoptera; Thysanoptera; Terebrantia; Thripoidea</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Tyroborus sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Chelicerata; Arachnida; Acari; Acariformes; Sarcoptiformes; Astigmata; Acaroidea; Acaridae; Tyrophaginae</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Uncultured bdelloid"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Chelicerata; Arachnida; Acari; Acariformes; Trombidiformes; Prostigmata; Eupodina</Lineage>"
+table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Unidentified nematode"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Nematoda; unclassified Nematoda</Lineage>"
+table_ncbi_HEX <- merge(names_and_lineage_HEX, res_blast_ncbi_and_feature_table_HEX, by.x = "scientific_names", by.y = "taxo", all.y = TRUE) %>% 
+  rename(Names_NCBI = scientific_names,
+         Identity_NCBI = X..identity,
+         Somme_reads = somme,
+         Taxonomy_NCBI = Lineage) %>% 
+  select(-c(mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score))
+# Hand adding the names that are missing (were not taken into account in the file)
+table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Dicopomorpha sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Endopterygota; Hymenoptera; Apocrita; Parasitoida; Chalcidoidea; Mymaridae</Lineage>"
+table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Oulema duftschmidi"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Endopterygota; Coleoptera; Polyphaga; Cucujiformia; Chrysomeloidea; Chrysomelidae; Criocerinae; Oulema</Lineage>"
+table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Uncultured Jaminaea"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Fungi; Dikarya; Basidiomycota; Ustilaginomycotina; Exobasidiomycetes; Microstromatales; Microstromatales incertae sedis</Lineage>"
+table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Uncultured Jaminaea"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Deuterostomia; Chordata; Craniata; Vertebrata; Gnathostomata; Teleostomi; Euteleostomi; Sarcopterygii; Dipnotetrapodomorpha; Tetrapoda; Amniota; Sauropsida; Sauria; Archelosauria; Archosauria; Dinosauria; Saurischia; Theropoda; Coelurosauria; Aves; Neognathae; Galloanserae; Galliformes; Phasianidae</Lineage>"
+table_ncbi_LEP <- merge(names_and_lineage_LEP, res_blast_ncbi_and_feature_table_LEP, by.x = "scientific_names", by.y = "taxo", all.y = TRUE)%>% 
+  rename(Names_NCBI = scientific_names,
+         Identity_NCBI = X..identity,
+         Somme_reads = somme,
+         Taxonomy_NCBI = Lineage) %>% 
+  select(-c(mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score))
+# Making a short version of the table with only a few variables
+short_ncbi_HCO <- table_ncbi_HCO %>% 
+  select(c(Names_NCBI, Identity_NCBI, alignment.length, Somme_reads, Taxonomy_NCBI)) %>% 
+  arrange(-Somme_reads) %>% 
+  mutate(Provenance = "HCO")
+short_ncbi_HEX <- table_ncbi_HEX %>% 
+  select(c(Names_NCBI, Identity_NCBI, alignment.length, Somme_reads, Taxonomy_NCBI)) %>% 
+  arrange(-Somme_reads) %>% 
+  mutate(Provenance = "HEX")
+short_ncbi_LEP <- table_ncbi_LEP %>% 
+  select(c(Names_NCBI, Identity_NCBI, alignment.length, Somme_reads, Taxonomy_NCBI)) %>% 
+  arrange(-Somme_reads) %>% 
+  mutate(Provenance = "LEP")
+# Cleaning up the environment to prevent it from being overloaded
+rm(names_and_lineage_HCO, scientific_name_epurated_HCO, phylogeny_HCO_1, phylogeny_HCO_2, names_and_lineage_HEX, scientific_name_epurated_HEX, phylogeny_HEX, names_and_lineage_LEP, scientific_name_epurated_LEP, phylogeny_LEP)
+```
+
+# ARTHEMIS
+
+## Importing the results of the blast on ARTHEMIS
+
+```{r}
+res_blast_arthemis_HCO <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_ARTHEMIS/HCO_arthemis.csv", sep = ";", header = TRUE)
+res_blast_arthemis_HEX <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_ARTHEMIS/HEX_arthemis.csv", sep = ";", header = TRUE)
+res_blast_arthemis_LEP <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_ARTHEMIS/LEP_arthemis.csv", sep = ";", header = TRUE)
+```
+
+## Selecting the required columns to continue
+
+```{r}
+# Selecting the required columns and making a taxonomic one on which we will be able to compare
+res_blast_arthemis_with_lineage_HCO <- res_blast_arthemis_HCO %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_ARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+res_blast_arthemis_with_lineage_HEX <- res_blast_arthemis_HEX %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_ARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+res_blast_arthemis_with_lineage_LEP <- res_blast_arthemis_LEP %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_ARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+```
+
+## Making the final arthemis table
+
+```{r}
+# Renaming the columns that may lead to confusion
+table_arthemis_HCO <- res_blast_arthemis_with_lineage_HCO %>% 
+  rename(Identity_ARTHEMIS = identity,
+         Phylum_ARTHEMIS = Phylum,
+         Class_ARTHEMIS = Class,
+         Order_ARTHEMIS = Order,
+         Family_ARTHEMIS = Family,
+         Genus_ARTHEMIS = Genus,
+         Species_ARTHEMIS = Species)
+table_arthemis_HEX <- res_blast_arthemis_with_lineage_HEX %>% 
+  rename(Identity_ARTHEMIS = identity,
+         Phylum_ARTHEMIS = Phylum,
+         Class_ARTHEMIS = Class,
+         Order_ARTHEMIS = Order,
+         Family_ARTHEMIS = Family,
+         Genus_ARTHEMIS = Genus,
+         Species_ARTHEMIS = Species)
+table_arthemis_LEP <- res_blast_arthemis_with_lineage_LEP %>% 
+  rename(Identity_ARTHEMIS = identity,
+         Phylum_ARTHEMIS = Phylum,
+         Class_ARTHEMIS = Class,
+         Order_ARTHEMIS = Order,
+         Family_ARTHEMIS = Family,
+         Genus_ARTHEMIS = Genus,
+         Species_ARTHEMIS = Species)
+# Cleaning up the environment to prevent it from being overloaded
+rm(res_blast_arthemis_with_lineage_HCO, res_blast_arthemis_with_lineage_HEX, res_blast_arthemis_with_lineage_LEP)
+```
+
+# Merging the final tables from NCBI and ARTHEMIS and extracting a short version of these tables
+
+```{r}
+# Merging the final tables
+table_ncbi_and_arthemis_HCO <- merge(table_ncbi_HCO, table_arthemis_HCO, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
+  mutate(Provenance = "HCO") %>% 
+  as.data.frame()
+table_ncbi_and_arthemis_HEX <- merge(table_ncbi_HEX, table_arthemis_HEX, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
+  mutate(Provenance = "HEX") %>% 
+  as.data.frame()
+table_ncbi_and_arthemis_LEP <- merge(table_ncbi_LEP, table_arthemis_LEP, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
+  mutate(Provenance = "LEP") %>% 
+  as.data.frame()
+# Making a shorter and more readable table
+short_ncbi_and_arthemis_HCO <- table_ncbi_and_arthemis_HCO %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, alignment.length, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Provenance))
+short_ncbi_and_arthemis_HEX <- table_ncbi_and_arthemis_HEX %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, alignment.length, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Provenance))
+short_ncbi_and_arthemis_LEP <- table_ncbi_and_arthemis_LEP %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, alignment.length, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Provenance))
+```
+
+# BOLD
+
+## Importing the results of the blast on BOLD
+
+```{r}
+res_blast_bold_HCO <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_BOLD/HCO_bold.csv", sep = ";", header = TRUE)
+res_blast_bold_HEX <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_BOLD/HEX_bold.csv", sep = ";", header = TRUE)
+res_blast_bold_LEP <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_BOLD/LEP_bold.csv", sep = ";", header = TRUE)
+```
+
+## Selecting the required columns to continue
+
+```{r}
+res_blast_bold_with_lineage_HCO <- res_blast_bold_HCO %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_BOLD = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+res_blast_bold_with_lineage_HEX <- res_blast_bold_HEX %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_BOLD = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+res_blast_bold_with_lineage_LEP <- res_blast_bold_LEP %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_BOLD = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+```
+
+## Making the final bold table
+
+```{r}
+table_bold_HCO <- res_blast_bold_with_lineage_HCO %>% 
+  rename(Identity_BOLD = identity,
+         Phylum_BOLD = Phylum,
+         Class_BOLD = Class,
+         Order_BOLD = Order,
+         Family_BOLD = Family,
+         Genus_BOLD = Genus,
+         Species_BOLD = Species)
+table_bold_HEX <- res_blast_bold_with_lineage_HEX %>% 
+  rename(Identity_BOLD = identity,
+         Phylum_BOLD = Phylum,
+         Class_BOLD = Class,
+         Order_BOLD = Order,
+         Family_BOLD = Family,
+         Genus_BOLD = Genus,
+         Species_BOLD = Species)
+table_bold_LEP <- res_blast_bold_with_lineage_LEP %>% 
+  rename(Identity_BOLD = identity,
+         Phylum_BOLD = Phylum,
+         Class_BOLD = Class,
+         Order_BOLD = Order,
+         Family_BOLD = Family,
+         Genus_BOLD = Genus,
+         Species_BOLD = Species)
+# Cleaning up the environment to prevent it from being overloaded
+rm(res_blast_bold_with_lineage_HCO, res_blast_bold_with_lineage_HEX, res_blast_bold_with_lineage_LEP)
+```
+
+# Merging the final tables from NCBI, ARTHEMIS and BOLD and extracting a short version of these tables
+
+```{r}
+# Merging the final tables
+table_ncbi_arthemis_and_bold_HCO <- merge(table_ncbi_and_arthemis_HCO, table_bold_HCO, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
+  mutate(Provenance = "HCO") %>% 
+  as.data.frame()
+table_ncbi_arthemis_and_bold_HEX <- merge(table_ncbi_and_arthemis_HEX, table_bold_HEX, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
+  mutate(Provenance = "HEX") %>% 
+  as.data.frame()
+table_ncbi_arthemis_and_bold_LEP <- merge(table_ncbi_and_arthemis_LEP, table_bold_LEP, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
+  mutate(Provenance = "LEP") %>% 
+  as.data.frame()
+# Making a shorter and more readable table
+short_ncbi_arthemis_and_bold_HCO <- table_ncbi_arthemis_and_bold_HCO %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Provenance))
+short_ncbi_arthemis_and_bold_HEX <- table_ncbi_arthemis_and_bold_HEX %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Provenance))
+short_ncbi_arthemis_and_bold_LEP <- table_ncbi_arthemis_and_bold_LEP %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Provenance))
+```
+
+# Merging the three markers to make one big table
+
+```{r}
+# Combining the final tables into one big table with all the markers in a column
+combined_table_three_blasts_all_markers <- rbind.fill(table_ncbi_arthemis_and_bold_HCO, table_ncbi_arthemis_and_bold_HEX, table_ncbi_arthemis_and_bold_LEP)  %>% 
+  select(c(query.acc.ver,
+           Names_NCBI,
+           Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD,
+           Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS,
+           Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD,
+           Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD,
+           Somme_reads,
+           J2198BIS,
+           J3F1,
+           J3GER1,
+           J3GP1,
+           J3GRA1,
+           J3RIEN1,
+           J3RIEN3,
+           R1J1100,
+           R1J1101,
+           R1J1118,
+           R1J1120,
+           R1J1131,
+           R1J113,
+           R1J116,
+           R1J1176,
+           R1J1189,
+           R1J1192,
+           R1J1197,
+           R1J1201,
+           R1J1239,
+           R1J1240,
+           R1J1250,
+           R1J1252,
+           R1J127,
+           R1J1315,
+           R1J1331,
+           R1J1344,
+           R1J1352,
+           R1J1370,
+           R1J1373,
+           R1J1376,
+           R1J1385,
+           R1J1410,
+           R1J1418,
+           R1J1426,
+           R1J1451,
+           R1J1470,
+           R1J1474,
+           R1J1489,
+           R1J149,
+           R1J167,
+           R1J196,
+           R1J1IXOS,
+           R1J2114,
+           R1J2117,
+           R1J2119,
+           R1J2122,
+           R1J2124,
+           R1J2130,
+           R1J2146,
+           R1J2175,
+           R1J2229,
+           R1J2230,
+           R1J2233,
+           R1J2237,
+           R1J2243,
+           R1J2295,
+           R1J2303,
+           R1J231,
+           R1J2368,
+           R1J238,
+           R1J23BIS,
+           R1J2401,
+           R1J2402,
+           R1J2435,
+           R1J2436,
+           R1J2441,
+           R1J2444,
+           R1J2453,
+           R1J2461,
+           R1J2462,
+           R1J2464,
+           R1J2476,
+           R1J265,
+           R1J270,
+           R1J273,
+           R1J274,
+           R1J275,
+           R1J283,
+           R1J294,
+           R1J3116,
+           R1J3126,
+           R1J3165,
+           R1J3184,
+           R1J3222,
+           R1J3235,
+           R1J3241,
+           R1J3316,
+           R1J3348,
+           R1J3350,
+           R1J3353,
+           R1J340,
+           R1J3435,
+           R1J3459,
+           R1J3469,
+           R1J34,
+           R1J377,
+           R1J392,
+           R2J1104,
+           R2J1112,
+           R2J1116,
+           R2J1118,
+           R2J1166,
+           R2J116,
+           R2J1185,
+           R2J1187,
+           R2J1197,
+           R2J1222,
+           R2J1230,
+           R2J1233,
+           R2J1235,
+           R2J1262,
+           R2J1268,
+           R2J1298,
+           R2J1315,
+           R2J1350,
+           R2J1353,
+           R2J1372,
+           R2J1423,
+           R2J1427,
+           R2J1435,
+           R2J1461,
+           R2J1462,
+           R2J1464,
+           R2J151,
+           R2J165,
+           R2J16,
+           R2J172,
+           R2J182,
+           R2J196,
+           R2J199,
+           R2J2101,
+           R2J2117,
+           R2J2120,
+           R2J2122,
+           R2J2124,
+           R2J2149,
+           R2J2153,
+           R2J2227,
+           R2J2265,
+           R2J227,
+           R2J2305,
+           R2J2331,
+           R2J2341,
+           R2J2345,
+           R2J2376,
+           R2J238,
+           R2J2395,
+           R2J240,
+           R2J2435,
+           R2J2436,
+           R2J2447,
+           R2J2483,
+           R2J259,
+           R2J25,
+           R2J273,
+           R2J277,
+           R2J283,
+           R2J3140,
+           R2J3143,
+           R2J3146,
+           R2J3192,
+           R2J3195,
+           R2J3202,
+           R2J3207,
+           R2J3237,
+           R2J3278,
+           R2J3279,
+           R2J3311,
+           R2J3316,
+           R2J3336,
+           R2J3346,
+           R2J335,
+           R2J3370,
+           R2J3371,
+           R2J3383,
+           R2J3402,
+           R2J3416,
+           R2J3441,
+           R2J3451,
+           R2J3460,
+           R2J3474,
+           R2J3476,
+           R2J3480,
+           R2J3485,
+           R2J3488,
+           R2J3489,
+           R2J349,
+           R2J367,
+           TemEXT3,
+           TemEXT4,
+           TemPCR1,
+           R1J110,
+           R1J1166,
+           R1J1187,
+           R1J1194,
+           R1J1207,
+           R1J1261,
+           R1J1262,
+           R1J1278,
+           R1J1309,
+           R1J1335,
+           R1J1366,
+           R1J1367,
+           R1J1372,
+           R1J1383,
+           R1J1387,
+           R1J1394,
+           R1J1480,
+           R1J1483,
+           R1J1504,
+           R1J151,
+           R1J15,
+           R1J168,
+           R1J195,
+           R1J1MariaB6R,
+           R1J2112,
+           R1J2153,
+           R1J2188,
+           R1J2399,
+           R1J23,
+           R1J241,
+           R1J2447,
+           R1J2485,
+           R1J2486,
+           R1J289,
+           R1J29,
+           R2J1139,
+           R2J1165,
+           R2J1175,
+           R2J1182,
+           R2J1189,
+           R2J1194,
+           R2J1199,
+           R2J1212,
+           R2J1261,
+           R2J1292,
+           R2J1352,
+           R2J1401,
+           R2J1407,
+           R2J1412,
+           R2J1415,
+           R2J1428,
+           R2J1444,
+           R2J1453,
+           R2J1465,
+           R2J1482,
+           R2J170,
+           R2J191,
+           R2J2176,
+           R2J2188,
+           R2J231,
+           R2J2394,
+           R2J2486,
+           R2J24,
+           R2J274,
+           R2J289,
+           TemEXT2,
+           R1J1265,
+           R1J1345,
+           R1J1388,
+           R1J2182,
+           R1J2202,
+           R1J2212,
+           R1J2336,
+           R1J2356,
+           R1J235,
+           R1J2377,
+           R1J2395,
+           R1J2415,
+           R1J2428,
+           R1J2465,
+           R1J2488,
+           R1J26,
+           R1J285,
+           R2J1119,
+           R2J1229,
+           R2J1368,
+           R2J1373,
+           R2J141,
+           R2J1IXOS,
+           R2J2114,
+           R2J213,
+           R2J2145,
+           R2J2179,
+           R2J2184,
+           R2J2201,
+           R2J2243,
+           R2J2309,
+           R2J2335,
+           R2J2344,
+           R2J2348,
+           R2J2367,
+           R2J2388,
+           R2J2504,
+           R2J268,
+           R2J292,
+           R2J295,
+           R2J2C495,
+           TemEXT1))
+# Putting the names of the columns extracted from all the feature tables into alphabetical order
+combined_table_three_blasts_all_markers <- combined_table_three_blasts_all_markers %>% 
+  relocate(sort(names(combined_table_three_blasts_all_markers[,22:ncol(combined_table_three_blasts_all_markers)])),
+           .after = Somme_reads) %>% 
+  arrange(-Identity_NCBI)
+# Writing a csv with the final table
+write.table(combined_table_three_blasts_all_markers, "comparing_blast_methods.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+```
+
+# BOLD and ARTHEMIS (This part down is facultative. It doesn't serve any purpose here, but it might depending on your study)
+
+## Importing the results of the blast on BOLD and ARTHEMIS combined
+
+```{r}
+res_blast_bold_and_arthemis_HCO <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_BOLD+ARTHEMIS/HCO_bold_and_arthemis.csv", sep = ";", header = TRUE)
+res_blast_bold_and_arthemis_HEX <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_BOLD+ARTHEMIS/HEX_bold_and_arthemis.csv", sep = ";", header = TRUE)
+res_blast_bold_and_arthemis_LEP <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_BOLD+ARTHEMIS/LEP_bold_and_arthemis.csv", sep = ";", header = TRUE)
+```
+
+## Selecting the required columns to continue
+
+```{r}
+res_blast_bold_and_arthemis_with_lineage_HCO <- res_blast_bold_and_arthemis_HCO %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_BOLDandARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+res_blast_bold_and_arthemis_with_lineage_HEX <- res_blast_bold_and_arthemis_HEX %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_BOLDandARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+res_blast_bold_and_arthemis_with_lineage_LEP <- res_blast_bold_and_arthemis_LEP %>% 
+  select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
+  mutate(Taxonomy_BOLDandARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+```
+
+## Making the final BOLD table
+
+```{r}
+table_bold_and_arthemis_HCO <- res_blast_bold_and_arthemis_with_lineage_HCO %>% 
+  rename(Identity_BOLDandARTHEMIS = identity,
+         Phylum_BOLDandARTHEMIS = Phylum,
+         Class_BOLDandARTHEMIS = Class,
+         Order_BOLDandARTHEMIS = Order,
+         Family_BOLDandARTHEMIS = Family,
+         Genus_BOLDandARTHEMIS = Genus,
+         Species_BOLDandARTHEMIS = Species)
+table_bold_and_arthemis_HEX <- res_blast_bold_and_arthemis_with_lineage_HEX %>% 
+  rename(Identity_BOLDandARTHEMIS = identity,
+         Phylum_BOLDandARTHEMIS = Phylum,
+         Class_BOLDandARTHEMIS = Class,
+         Order_BOLDandARTHEMIS = Order,
+         Family_BOLDandARTHEMIS = Family,
+         Genus_BOLDandARTHEMIS = Genus,
+         Species_BOLDandARTHEMIS = Species)
+table_bold_and_arthemis_LEP <- res_blast_bold_and_arthemis_with_lineage_LEP %>% 
+  rename(Identity_BOLDandARTHEMIS = identity,
+         Phylum_BOLDandARTHEMIS = Phylum,
+         Class_BOLDandARTHEMIS = Class,
+         Order_BOLDandARTHEMIS = Order,
+         Family_BOLDandARTHEMIS = Family,
+         Genus_BOLDandARTHEMIS = Genus,
+         Species_BOLDandARTHEMIS = Species)
+# Cleaning up the environment to prevent it from being overloaded
+rm(res_blast_bold_and_arthemis_with_lineage_HCO, res_blast_bold_and_arthemis_with_lineage_HEX, res_blast_bold_and_arthemis_with_lineage_LEP)
+```
+
+# Merging the final tables from NCBI, ARTHEMIS, BOLD and the combination of BOLD and ARTHEMIS and extracting a short version of these tables
+
+```{r}
+# Merging the final tables
+final_table_four_blasts_HCO <- merge(table_ncbi_arthemis_and_bold_HCO, table_bold_and_arthemis_HCO, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE)
+final_table_four_blasts_HEX <- merge(table_ncbi_arthemis_and_bold_HEX, table_bold_and_arthemis_HEX, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE)
+final_table_four_blasts_LEP <- merge(table_ncbi_arthemis_and_bold_LEP, table_bold_and_arthemis_LEP, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE)
+# Making a shorter and more readable table
+short_table_four_blasts_HCO <- final_table_four_blasts_HCO %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Identity_BOLDandARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD, Species_BOLDandARTHEMIS, Genus_BOLDandARTHEMIS, Family_BOLDandARTHEMIS, Order_BOLDandARTHEMIS, Class_BOLDandARTHEMIS, Phylum_BOLDandARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Taxonomy_BOLDandARTHEMIS, Provenance))
+short_table_four_blasts_HEX <- final_table_four_blasts_HEX %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Identity_BOLDandARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD, Species_BOLDandARTHEMIS, Genus_BOLDandARTHEMIS, Family_BOLDandARTHEMIS, Order_BOLDandARTHEMIS, Class_BOLDandARTHEMIS, Phylum_BOLDandARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Taxonomy_BOLDandARTHEMIS, Provenance))
+short_table_four_blasts_LEP <- final_table_four_blasts_LEP %>% 
+  select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Identity_BOLDandARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD, Species_BOLDandARTHEMIS, Genus_BOLDandARTHEMIS, Family_BOLDandARTHEMIS, Order_BOLDandARTHEMIS, Class_BOLDandARTHEMIS, Phylum_BOLDandARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Taxonomy_BOLDandARTHEMIS, Provenance))
+# Combining all the tables into a big data base
+```
+
+# Merging the three markers to make one big table
+
+```{r}
+# Combining the final tables into one big table with all the markers in a column
+final_combined_table_all_markers <- rbind.fill(final_table_four_blasts_HCO, final_table_four_blasts_HEX, final_table_four_blasts_LEP)  %>% 
+  select(c(query.acc.ver,
+           Names_NCBI,
+           Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Identity_BOLDandARTHEMIS,
+           Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS,
+           Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD,
+           Species_BOLDandARTHEMIS, Genus_BOLDandARTHEMIS, Family_BOLDandARTHEMIS, Order_BOLDandARTHEMIS, Class_BOLDandARTHEMIS, Phylum_BOLDandARTHEMIS,
+           Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Taxonomy_BOLDandARTHEMIS,
+           Somme_reads,
+           J2198BIS,
+           J3F1,
+           J3GER1,
+           J3GP1,
+           J3GRA1,
+           J3RIEN1,
+           J3RIEN3,
+           R1J1100,
+           R1J1101,
+           R1J1118,
+           R1J1120,
+           R1J1131,
+           R1J113,
+           R1J116,
+           R1J1176,
+           R1J1189,
+           R1J1192,
+           R1J1197,
+           R1J1201,
+           R1J1239,
+           R1J1240,
+           R1J1250,
+           R1J1252,
+           R1J127,
+           R1J1315,
+           R1J1331,
+           R1J1344,
+           R1J1352,
+           R1J1370,
+           R1J1373,
+           R1J1376,
+           R1J1385,
+           R1J1410,
+           R1J1418,
+           R1J1426,
+           R1J1451,
+           R1J1470,
+           R1J1474,
+           R1J1489,
+           R1J149,
+           R1J167,
+           R1J196,
+           R1J1IXOS,
+           R1J2114,
+           R1J2117,
+           R1J2119,
+           R1J2122,
+           R1J2124,
+           R1J2130,
+           R1J2146,
+           R1J2175,
+           R1J2229,
+           R1J2230,
+           R1J2233,
+           R1J2237,
+           R1J2243,
+           R1J2295,
+           R1J2303,
+           R1J231,
+           R1J2368,
+           R1J238,
+           R1J23BIS,
+           R1J2401,
+           R1J2402,
+           R1J2435,
+           R1J2436,
+           R1J2441,
+           R1J2444,
+           R1J2453,
+           R1J2461,
+           R1J2462,
+           R1J2464,
+           R1J2476,
+           R1J265,
+           R1J270,
+           R1J273,
+           R1J274,
+           R1J275,
+           R1J283,
+           R1J294,
+           R1J3116,
+           R1J3126,
+           R1J3165,
+           R1J3184,
+           R1J3222,
+           R1J3235,
+           R1J3241,
+           R1J3316,
+           R1J3348,
+           R1J3350,
+           R1J3353,
+           R1J340,
+           R1J3435,
+           R1J3459,
+           R1J3469,
+           R1J34,
+           R1J377,
+           R1J392,
+           R2J1104,
+           R2J1112,
+           R2J1116,
+           R2J1118,
+           R2J1166,
+           R2J116,
+           R2J1185,
+           R2J1187,
+           R2J1197,
+           R2J1222,
+           R2J1230,
+           R2J1233,
+           R2J1235,
+           R2J1262,
+           R2J1268,
+           R2J1298,
+           R2J1315,
+           R2J1350,
+           R2J1353,
+           R2J1372,
+           R2J1423,
+           R2J1427,
+           R2J1435,
+           R2J1461,
+           R2J1462,
+           R2J1464,
+           R2J151,
+           R2J165,
+           R2J16,
+           R2J172,
+           R2J182,
+           R2J196,
+           R2J199,
+           R2J2101,
+           R2J2117,
+           R2J2120,
+           R2J2122,
+           R2J2124,
+           R2J2149,
+           R2J2153,
+           R2J2227,
+           R2J2265,
+           R2J227,
+           R2J2305,
+           R2J2331,
+           R2J2341,
+           R2J2345,
+           R2J2376,
+           R2J238,
+           R2J2395,
+           R2J240,
+           R2J2435,
+           R2J2436,
+           R2J2447,
+           R2J2483,
+           R2J259,
+           R2J25,
+           R2J273,
+           R2J277,
+           R2J283,
+           R2J3140,
+           R2J3143,
+           R2J3146,
+           R2J3192,
+           R2J3195,
+           R2J3202,
+           R2J3207,
+           R2J3237,
+           R2J3278,
+           R2J3279,
+           R2J3311,
+           R2J3316,
+           R2J3336,
+           R2J3346,
+           R2J335,
+           R2J3370,
+           R2J3371,
+           R2J3383,
+           R2J3402,
+           R2J3416,
+           R2J3441,
+           R2J3451,
+           R2J3460,
+           R2J3474,
+           R2J3476,
+           R2J3480,
+           R2J3485,
+           R2J3488,
+           R2J3489,
+           R2J349,
+           R2J367,
+           TemEXT3,
+           TemEXT4,
+           TemPCR1,
+           R1J110,
+           R1J1166,
+           R1J1187,
+           R1J1194,
+           R1J1207,
+           R1J1261,
+           R1J1262,
+           R1J1278,
+           R1J1309,
+           R1J1335,
+           R1J1366,
+           R1J1367,
+           R1J1372,
+           R1J1383,
+           R1J1387,
+           R1J1394,
+           R1J1480,
+           R1J1483,
+           R1J1504,
+           R1J151,
+           R1J15,
+           R1J168,
+           R1J195,
+           R1J1MariaB6R,
+           R1J2112,
+           R1J2153,
+           R1J2188,
+           R1J2399,
+           R1J23,
+           R1J241,
+           R1J2447,
+           R1J2485,
+           R1J2486,
+           R1J289,
+           R1J29,
+           R2J1139,
+           R2J1165,
+           R2J1175,
+           R2J1182,
+           R2J1189,
+           R2J1194,
+           R2J1199,
+           R2J1212,
+           R2J1261,
+           R2J1292,
+           R2J1352,
+           R2J1401,
+           R2J1407,
+           R2J1412,
+           R2J1415,
+           R2J1428,
+           R2J1444,
+           R2J1453,
+           R2J1465,
+           R2J1482,
+           R2J170,
+           R2J191,
+           R2J2176,
+           R2J2188,
+           R2J231,
+           R2J2394,
+           R2J2486,
+           R2J24,
+           R2J274,
+           R2J289,
+           TemEXT2,
+           R1J1265,
+           R1J1345,
+           R1J1388,
+           R1J2182,
+           R1J2202,
+           R1J2212,
+           R1J2336,
+           R1J2356,
+           R1J235,
+           R1J2377,
+           R1J2395,
+           R1J2415,
+           R1J2428,
+           R1J2465,
+           R1J2488,
+           R1J26,
+           R1J285,
+           R2J1119,
+           R2J1229,
+           R2J1368,
+           R2J1373,
+           R2J141,
+           R2J1IXOS,
+           R2J2114,
+           R2J213,
+           R2J2145,
+           R2J2179,
+           R2J2184,
+           R2J2201,
+           R2J2243,
+           R2J2309,
+           R2J2335,
+           R2J2344,
+           R2J2348,
+           R2J2367,
+           R2J2388,
+           R2J2504,
+           R2J268,
+           R2J292,
+           R2J295,
+           R2J2C495,
+           TemEXT1))
+# Putting the names of the columns extracted from all the feature tables into alphabetical order
+final_combined_table_all_markers <- final_combined_table_all_markers %>% 
+  relocate(sort(names(final_combined_table_all_markers[,30:ncol(final_combined_table_all_markers)])),
+           .after = Somme_reads) %>% 
+  arrange(-Identity_NCBI)
+# Writing a csv with the final table
+write.table(final_combined_table_all_markers, "comparing_blast_methods.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+```
+
+# Combining all the tables into a big data base
+
+```{r}
+# Combining the final tables into one big table with all the markers in a column
+final_combined_table_all_markers <- rbind.fill(final_table_four_blasts_HCO, final_table_four_blasts_HEX, final_table_four_blasts_LEP)  %>% 
+  select(c(query.acc.ver,
+           Names_NCBI,
+           Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Identity_BOLDandARTHEMIS,
+           Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS,
+           Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD,
+           Species_BOLDandARTHEMIS, Genus_BOLDandARTHEMIS, Family_BOLDandARTHEMIS, Order_BOLDandARTHEMIS, Class_BOLDandARTHEMIS, Phylum_BOLDandARTHEMIS,
+           Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Taxonomy_BOLDandARTHEMIS,
+           Somme_reads,
+           J2198BIS,
+           J3F1,
+           J3GER1,
+           J3GP1,
+           J3GRA1,
+           J3RIEN1,
+           J3RIEN3,
+           R1J1100,
+           R1J1101,
+           R1J1118,
+           R1J1120,
+           R1J1131,
+           R1J113,
+           R1J116,
+           R1J1176,
+           R1J1189,
+           R1J1192,
+           R1J1197,
+           R1J1201,
+           R1J1239,
+           R1J1240,
+           R1J1250,
+           R1J1252,
+           R1J127,
+           R1J1315,
+           R1J1331,
+           R1J1344,
+           R1J1352,
+           R1J1370,
+           R1J1373,
+           R1J1376,
+           R1J1385,
+           R1J1410,
+           R1J1418,
+           R1J1426,
+           R1J1451,
+           R1J1470,
+           R1J1474,
+           R1J1489,
+           R1J149,
+           R1J167,
+           R1J196,
+           R1J1IXOS,
+           R1J2114,
+           R1J2117,
+           R1J2119,
+           R1J2122,
+           R1J2124,
+           R1J2130,
+           R1J2146,
+           R1J2175,
+           R1J2229,
+           R1J2230,
+           R1J2233,
+           R1J2237,
+           R1J2243,
+           R1J2295,
+           R1J2303,
+           R1J231,
+           R1J2368,
+           R1J238,
+           R1J23BIS,
+           R1J2401,
+           R1J2402,
+           R1J2435,
+           R1J2436,
+           R1J2441,
+           R1J2444,
+           R1J2453,
+           R1J2461,
+           R1J2462,
+           R1J2464,
+           R1J2476,
+           R1J265,
+           R1J270,
+           R1J273,
+           R1J274,
+           R1J275,
+           R1J283,
+           R1J294,
+           R1J3116,
+           R1J3126,
+           R1J3165,
+           R1J3184,
+           R1J3222,
+           R1J3235,
+           R1J3241,
+           R1J3316,
+           R1J3348,
+           R1J3350,
+           R1J3353,
+           R1J340,
+           R1J3435,
+           R1J3459,
+           R1J3469,
+           R1J34,
+           R1J377,
+           R1J392,
+           R2J1104,
+           R2J1112,
+           R2J1116,
+           R2J1118,
+           R2J1166,
+           R2J116,
+           R2J1185,
+           R2J1187,
+           R2J1197,
+           R2J1222,
+           R2J1230,
+           R2J1233,
+           R2J1235,
+           R2J1262,
+           R2J1268,
+           R2J1298,
+           R2J1315,
+           R2J1350,
+           R2J1353,
+           R2J1372,
+           R2J1423,
+           R2J1427,
+           R2J1435,
+           R2J1461,
+           R2J1462,
+           R2J1464,
+           R2J151,
+           R2J165,
+           R2J16,
+           R2J172,
+           R2J182,
+           R2J196,
+           R2J199,
+           R2J2101,
+           R2J2117,
+           R2J2120,
+           R2J2122,
+           R2J2124,
+           R2J2149,
+           R2J2153,
+           R2J2227,
+           R2J2265,
+           R2J227,
+           R2J2305,
+           R2J2331,
+           R2J2341,
+           R2J2345,
+           R2J2376,
+           R2J238,
+           R2J2395,
+           R2J240,
+           R2J2435,
+           R2J2436,
+           R2J2447,
+           R2J2483,
+           R2J259,
+           R2J25,
+           R2J273,
+           R2J277,
+           R2J283,
+           R2J3140,
+           R2J3143,
+           R2J3146,
+           R2J3192,
+           R2J3195,
+           R2J3202,
+           R2J3207,
+           R2J3237,
+           R2J3278,
+           R2J3279,
+           R2J3311,
+           R2J3316,
+           R2J3336,
+           R2J3346,
+           R2J335,
+           R2J3370,
+           R2J3371,
+           R2J3383,
+           R2J3402,
+           R2J3416,
+           R2J3441,
+           R2J3451,
+           R2J3460,
+           R2J3474,
+           R2J3476,
+           R2J3480,
+           R2J3485,
+           R2J3488,
+           R2J3489,
+           R2J349,
+           R2J367,
+           TemEXT3,
+           TemEXT4,
+           TemPCR1,
+           R1J110,
+           R1J1166,
+           R1J1187,
+           R1J1194,
+           R1J1207,
+           R1J1261,
+           R1J1262,
+           R1J1278,
+           R1J1309,
+           R1J1335,
+           R1J1366,
+           R1J1367,
+           R1J1372,
+           R1J1383,
+           R1J1387,
+           R1J1394,
+           R1J1480,
+           R1J1483,
+           R1J1504,
+           R1J151,
+           R1J15,
+           R1J168,
+           R1J195,
+           R1J1MariaB6R,
+           R1J2112,
+           R1J2153,
+           R1J2188,
+           R1J2399,
+           R1J23,
+           R1J241,
+           R1J2447,
+           R1J2485,
+           R1J2486,
+           R1J289,
+           R1J29,
+           R2J1139,
+           R2J1165,
+           R2J1175,
+           R2J1182,
+           R2J1189,
+           R2J1194,
+           R2J1199,
+           R2J1212,
+           R2J1261,
+           R2J1292,
+           R2J1352,
+           R2J1401,
+           R2J1407,
+           R2J1412,
+           R2J1415,
+           R2J1428,
+           R2J1444,
+           R2J1453,
+           R2J1465,
+           R2J1482,
+           R2J170,
+           R2J191,
+           R2J2176,
+           R2J2188,
+           R2J231,
+           R2J2394,
+           R2J2486,
+           R2J24,
+           R2J274,
+           R2J289,
+           TemEXT2,
+           R1J1265,
+           R1J1345,
+           R1J1388,
+           R1J2182,
+           R1J2202,
+           R1J2212,
+           R1J2336,
+           R1J2356,
+           R1J235,
+           R1J2377,
+           R1J2395,
+           R1J2415,
+           R1J2428,
+           R1J2465,
+           R1J2488,
+           R1J26,
+           R1J285,
+           R2J1119,
+           R2J1229,
+           R2J1368,
+           R2J1373,
+           R2J141,
+           R2J1IXOS,
+           R2J2114,
+           R2J213,
+           R2J2145,
+           R2J2179,
+           R2J2184,
+           R2J2201,
+           R2J2243,
+           R2J2309,
+           R2J2335,
+           R2J2344,
+           R2J2348,
+           R2J2367,
+           R2J2388,
+           R2J2504,
+           R2J268,
+           R2J292,
+           R2J295,
+           R2J2C495,
+           TemEXT1))
+# Putting the names of the columns extracted from all the feature tables into alphabetical order
+final_combined_table_all_markers <- final_combined_table_all_markers %>% 
+  relocate(sort(names(final_combined_table_all_markers[,30:ncol(final_combined_table_all_markers)])),
+           .after = Somme_reads) %>% 
+  arrange(-Identity_NCBI)
+# Writing a csv with the final table
+write.table(final_combined_table_all_markers, "comparing_blast_methods.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+```
+
+
+
+
+# BIN
+```{r}
+grep("137728da87149e03fcb1f5246de1475e", final_table_ncbi_and_arthemis_HCO)
+ftable_ncbi <- rbind(short_ncbi_HCO, short_ncbi_HEX, short_ncbi_LEP)
+final_table_HCO <- merge(final_table_HCO, res_blast_ARTHEMIS_HCO, by.x = "query.acc.ver", by.y = "Feature.ID")
+list_arthro <- ftable_ncbi[grep("Arthropoda", ftable_ncbi$Taxonomy_NCBI),]
+write.table(short_ncbi_HCO, "short_crosssing_table.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+```
