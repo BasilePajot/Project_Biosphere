@@ -1,0 +1,239 @@
+
+---
+title: 'Heritability and spatial distribution of aphid mummies on wheat ears'
+author: "C.MELOT ; C.LE BOUAR ; L.RIZZI"
+date: "20/06/2021"
+output:
+  word_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Analysis
+
+## Tools
+```{r, echo=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(SpATS)
+library(corpcor)
+library(plyr)
+library(readr)
+```
+
+## Phenotypic data
+Phenotypic data is loaded
+```{r}
+setwd("C:/Users/capuc/Desktop/JRL 2021/script/SCRIPT.JRL") # modify according to the directory place
+
+A<-read.table("sortie2.csv", sep=";", header = T)
+
+
+
+# Link between passage and lines
+A$passageGD<-A$passage
+levels(A$GD)
+
+A$passageGD[A$GD=="D"]<-A$passageGD[A$GD=="D"]+0.5
+
+```
+
+## Data visualization
+Vizualisation of the variable. 
+For the mummies aphids : "somme_PP_TOTAL"
+For terminal mummies aphids : "somme_Nbpucerons_vides_momies"
+
+For living mummies aphids: "somme_Nbpucerons_parasites"
+
+```{r}
+A$variable<-A$somme_PP_TOTAL
+variable1<-"somme_PP_TOTAL"
+A$variable=as.numeric(A$variable)
+hist(A$variable, main=paste("Distribution of", variable1), cex.main=0.9, xlab=variable1, col="pink")
+```
+
+##Cartography 
+ 
+Here is the spatial distribution of the brut cartography. 
+
+```{r}
+A$passage_inverse<-max(A$passageGD)-A$passageGD
+zp1 <- ggplot(A, aes(x =planche, y =passage_inverse, fill = variable))
+zp1 <- zp1 + geom_tile()
+zp1 <- zp1 + coord_equal()
+zp1
+
+```
+
+## Spatial analysis
+
+
+```{r}
+A$R <- as.factor(A$planche)
+A$C <- as.factor(A$passageGD)
+#genotype is fixed
+m0_A_F <- SpATS(response = variable1, 
+             spatial = ~ SAP( passageGD, planche, nseg = c(10,20), 
+             degree = 3, pord = 2),
+             genotype = "Genotype", genotype.as.random = FALSE,
+             random = ~ R + C,
+             data = A,
+             control = list(tolerance = 1e-03))
+
+#genotype is random
+m0_A_R <- SpATS(response = variable1, 
+             spatial = ~ SAP( passageGD, planche, nseg = c(10,20), 
+             degree = 3, pord = 2),
+             genotype = "Genotype", genotype.as.random = TRUE,
+             random = ~ R + C,
+             data = A,
+             control = list(tolerance = 1e-03))
+
+
+# Brief summary
+m0_A_F
+m0_A_R
+
+# More information: dimensions
+#summary(m0_A_F, which = "dimensions") 
+#summary(m0_A_R, which = "dimensions") 
+
+# More information: variances
+#summary(m0_A_F, which = "variances")
+#summary(m0_A_R, which = "variances")
+
+# More information: all
+#summary(m0_A_F, which = "all")
+#summary(m0_A_R, which = "all")
+
+# Plot results
+plot(m0_A_F)
+plot(m0_A_R)
+
+
+# Compute the variogram*
+#var.m0_A_F <- variogram(m0_A_F)
+
+# Plot the variogram
+#plot(var.m0_A_F)
+
+#creation of BLUE and BLUP vector
+BLUE<-m0_A_F$coeff[1:184]
+BLUP<-m0_A_R$coeff[1:184]
+
+BLUE[which(names(BLUE)=="Intercept")]<-0
+names(BLUE)[which(names(BLUE)=="Intercept")]<-names(BLUP)[1]
+BLUE<-BLUE[order(names(BLUE))]
+
+plot(BLUP, BLUE)
+```
+
+
+```{r}
+which(BLUP>0.8)
+BLUE[118]
+hist(BLUE, col="yellow")
+hist(BLUP, col="orange")
+
+```
+
+BLUE and BLUPS data are saved in a csv file. 
+```{r}
+
+donnee<-data.frame(blue=BLUE, blup=BLUP)
+
+write.table(donnee, "BlueBlupS2.csv", sep=";",col.names = TRUE, row.names = TRUE)
+
+```
+
+
+## Heritability
+Heritabilities with and without correction are estimated
+
+
+### Without spatial correction
+Individual heritability (for each genotype)
+
+```{r}
+library(lme4)
+
+mnaif<-lmer(variable ~ rep +(1|Genotype), data=A)
+VG<-as.data.frame(VarCorr(mnaif))$sdcor[1]**2
+VE<-as.data.frame(VarCorr(mnaif))$sdcor[2]**2
+#mnaif
+VG/(VG+VE)#individual heritability
+VG #genotypic variance
+VE #environmental variance
+```
+
+Design heritability (mean of the two genotypes)
+```{r}
+VG/(VG+VE/2)
+
+```
+
+### With spatial correction
+
+```{r}
+summary(m0_A_R, which = "variances")
+
+getHeritability(m0_A_R)
+
+```
+
+# Fit spatial covariable
+
+Creation of a covariable to see links between number of mummies independantly from the genotypes of the wheat. 
+The function obtain.spatialtrend is used. 
+
+```{r}
+# a value for each plot is created
+nrowA<-nlevels(as.factor(A$passageGD))
+ncolA<-nlevels(as.factor(A$planche))
+
+spat.trend.2 <- obtain.spatialtrend(m0_A_R, grid = c(nrowA, ncolA))
+
+colors = topo.colors(100)
+
+fields::image.plot(spat.trend.2$col.p, spat.trend.2$row.p, t(spat.trend.2$fit),
+                   main = paste("Prediction on a grid of",  nrowA, " x ", ncolA),
+                   col = colors, xlab = "Passage", ylab = "Planche")
+
+#results are saved in a table
+ligne<-NA
+colonne<-NA
+correction<-NA
+
+for ( i in 1:length(spat.trend.2$col.p)) {
+  for (j in 1:length(spat.trend.2$row.p)) {
+    ligne<-append(ligne,spat.trend.2$col.p[i])
+    colonne<-append(colonne,spat.trend.2$row.p[j])
+    correction<-append(correction, t(spat.trend.2$fit)[i,j])
+  }
+}
+
+ACor<-data.frame(passage=ligne, planche=colonne, Correction=correction) 
+ACor<-ACor[-1,]
+ACor[1:10,]
+
+zp1 <- ggplot(ACor, aes(x =passage, y =planche, fill = Correction))
+zp1 <- zp1 + geom_tile()
+zp1<-  zp1 + scale_fill_gradientn(colors=colors)
+zp1 <- zp1 + coord_equal()
+zp1
+```
+
+
+```{r}
+#File is saved in a csv file.
+write.table(ACor, "Covariable.csv", sep=";",col.names = TRUE, row.names = FALSE)
+
+```
+
+
+
