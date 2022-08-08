@@ -1,5 +1,5 @@
 This directory contains two directories. Both of contain scripts to do a GWAS. 
 
-The first one contains the scripts that were made to do a GWAS taking into account the number of aphid mummies that were countedon May 25t and June 4th. 
+The first one contains the scripts that were made to do a GWAS taking into account the number of aphid mummies that were countedon May 25t and June 4th. The data used to run this part is found at the following link: https://drive.google.com/drive/u/1/folders/17gLxfMq9okdNTc7ZOMwmvokp8Cs8NpWB 
 
-The second one contains the scripts that were made to do a GWAS on the sequencing data.
+The second one contains the scripts that were made to do a GWAS on the sequencing data. The necessary data to run these scripts are found in the same link, but in a different folder called "3. Taxa on wheat lines".
