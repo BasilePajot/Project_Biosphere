@@ -1,7 +1,5 @@
-This directory contains everything that you need to do a GWAS of the data you had from the blasted data.
+This directory contains two directories. Both of contain scripts to do a GWAS. 
 
-First, the "comparative blasting method" file is used to compare the Ncbi, Bold and Arthemis results on the different databases and make comparative databases. 
+The first one contains the scripts that were made to do a GWAS taking into account the number of aphid mummies that were countedon May 25t and June 4th. 
 
-Then, the "Analyse_of_the_insect_database" file is used to use the transformed table from the previous file to make a Gwas with the data. The input of this file 
-must be a table with just one sceintific name and the justification of why this name. Contact me and I will be able to give you a preview of what the data is 
-supposed to look like to be used.
+The second one contains the scripts that were made to do a GWAS on the sequencing data.
