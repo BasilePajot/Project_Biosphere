@@ -154,7 +154,7 @@ short_ncbi_LEP <- res_blast_ncbi_and_feature_table_LEP %>%
   arrange(-somme)
 
 # Cleaning up the environment to prevent it from being overloaded
-rm(res_blast_ncbi_with_taxo_HCO, res_blast_ncbi_with_taxo_HEX, res_blast_ncbi_with_taxo_LEP)
+# rm(res_blast_ncbi_with_taxo_HCO, res_blast_ncbi_with_taxo_HEX, res_blast_ncbi_with_taxo_LEP)
 ```
 
 ## Adding the lineage to the tables
@@ -181,7 +181,7 @@ phylogeny_LEP <- reference_taxonomy_LEP[grep("<Lineage>", reference_taxonomy_LEP
 scientific_name_LEP <- reference_taxonomy_LEP[grep("<ScientificName>", reference_taxonomy_LEP)]
 
 # Cleaning up the environment to prevent it from being overloaded
-rm(reference_taxonomy_HCO_1, reference_taxonomy_HCO_2, reference_taxonomy_HEX, reference_taxonomy_LEP)
+# rm(reference_taxonomy_HCO_1, reference_taxonomy_HCO_2, reference_taxonomy_HEX, reference_taxonomy_LEP)
 ```
 
 ### Extracting the names we are interested in from the list of scientific names
@@ -319,11 +319,42 @@ short_ncbi_LEP <- table_ncbi_LEP %>%
   arrange(-Somme_reads) %>% 
   mutate(Provenance = "LEP")
 
-# Writting tables with the name of the added taxa rather than just the code
-write.table(table_ncbi_HCO, "Taxonomy_NCBI/HCO_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
-write.table(table_ncbi_HEX, "Taxonomy_NCBI/HEX_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
-write.table(table_ncbi_LEP, "Taxonomy_NCBI/LEP_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
+table_int_ncbi_HCO <- merge(table_ncbi_HCO, res_blast_ncbi_with_taxo_HCO, by.x = c("Names_NCBI", "query.acc.ver", "Identity_NCBI", "alignment.length","code"), by.y = c("taxo", "query.acc.ver", "X..identity", "alignment.length", "code")) %>% 
+  select(c(query.acc.ver, Names_NCBI, Taxonomy_NCBI, Identity_NCBI, alignment.length, mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score)) %>% 
+  rename(identity = Identity_NCBI,
+         alignment_length = alignment.length,
+         number_mismatches = mismatches, 
+         number_gaps = gap.opens,
+         query.start = q..start,
+         query.end = q..end,
+         subject.start = s..start,
+         subject.end = s..end)
+table_int_ncbi_HEX <- merge(table_ncbi_HEX, res_blast_ncbi_with_taxo_HEX, by.x = c("Names_NCBI", "query.acc.ver", "Identity_NCBI", "alignment.length","code"), by.y = c("taxo", "query.acc.ver", "X..identity", "alignment.length", "code")) %>% 
+  select(c(query.acc.ver, Names_NCBI, Taxonomy_NCBI, Identity_NCBI, alignment.length, mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score)) %>% 
+  rename(identity = Identity_NCBI,
+         alignment_length = alignment.length,
+         number_mismatches = mismatches, 
+         number_gaps = gap.opens,
+         query.start = q..start,
+         query.end = q..end,
+         subject.start = s..start,
+         subject.end = s..end)
+table_int_ncbi_LEP <- merge(table_ncbi_LEP, res_blast_ncbi_with_taxo_LEP, by.x = c("Names_NCBI", "query.acc.ver", "Identity_NCBI", "alignment.length","code"), by.y = c("taxo", "query.acc.ver", "X..identity", "alignment.length", "code")) %>% 
+  select(c(query.acc.ver, Names_NCBI, Taxonomy_NCBI, Identity_NCBI, alignment.length, mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score)) %>% 
+  rename(identity = Identity_NCBI,
+         alignment_length = alignment.length,
+         number_mismatches = mismatches, 
+         number_gaps = gap.opens,
+         query.start = q..start,
+         query.end = q..end,
+         subject.start = s..start,
+         subject.end = s..end)
 
+
+# Writting tables with the name of the added taxa rather than just the code
+write.table(table_int_ncbi_HCO, "Taxonomy_NCBI/HCO_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
+write.table(table_int_ncbi_HEX, "Taxonomy_NCBI/HEX_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
+write.table(table_int_ncbi_LEP, "Taxonomy_NCBI/LEP_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
 # Cleaning up the environment to prevent it from being overloaded
 rm(names_and_lineage_HCO, scientific_name_epurated_HCO, phylogeny_HCO_1, phylogeny_HCO_2, names_and_lineage_HEX, scientific_name_epurated_HEX, phylogeny_HEX, names_and_lineage_LEP, scientific_name_epurated_LEP, phylogeny_LEP)
 ```
