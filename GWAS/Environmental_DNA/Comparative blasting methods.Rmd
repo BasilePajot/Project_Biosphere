@@ -16,6 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(anyLib)  # This library allows you to import (if it is not already the case) and load all the selected libraries
 anyLib(c("plyr", "FactoMineR", "tidyverse", "dbplyr", "stringr", "ggplot2", "RColorBrewer", "VennDiagram"))
+
 ```
 
 # Importing the feature tables that came out of the sequencing pipeline
@@ -34,10 +35,12 @@ feature_table_LEP <- read.table("C:/Documents/ECOLE/2021-2022 Montpellier SupAgr
 res_blast_ncbi_HCO <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/matchs_ncbi_HCO.csv", sep = ";", header =TRUE)
 res_blast_ncbi_HEX <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/matchs_ncbi_HEX.csv", sep = ";", header =TRUE)
 res_blast_ncbi_LEP <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier SupAgro/Stage/Stage 2A et césure/Stage CBGP - ARCAD/Données/Data_insects/Taxonomy_NCBI/matchs_ncbi_LEP.csv", sep = ";", header =TRUE)
+
 # Extracting the lists of the references to compare them with filtered data
 list_tot_HCO_ncbi <- levels(as.factor(res_blast_ncbi_HCO$query.acc.ver))
 list_tot_HEX_ncbi <- levels(as.factor(res_blast_ncbi_HEX$query.acc.ver))
 list_tot_LEP_ncbi <- levels(as.factor(res_blast_ncbi_LEP$query.acc.ver))
+
 # Filtering the data
 res_blast_ncbi_HCO_filtered <- res_blast_ncbi_HCO %>% 
   filter(X..identity > 75,
@@ -48,14 +51,17 @@ res_blast_ncbi_HEX_filtered <- res_blast_ncbi_HEX %>%
 res_blast_ncbi_LEP_filtered <- res_blast_ncbi_LEP %>% 
   filter(X..identity > 75,
          alignment.length > 200)
+
 # Extracting the new list of the references after filtering
 list_filt_HCO_ncbi <- levels(as.factor(res_blast_ncbi_HCO_filtered$query.acc.ver))
 list_filt_HEX_ncbi <- levels(as.factor(res_blast_ncbi_HEX_filtered$query.acc.ver))
 list_filt_LEP_ncbi <- levels(as.factor(res_blast_ncbi_LEP_filtered$query.acc.ver))
+
 # Finding the missing pieces of the first table by comparing the two lists
 missing_HCO <- setdiff(list_tot_HCO_ncbi, list_filt_HCO_ncbi)
 missing_HEX <- setdiff(list_tot_HEX_ncbi, list_filt_HEX_ncbi)
 missing_LEP <- setdiff(list_tot_LEP_ncbi, list_filt_LEP_ncbi)
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(missing_HCO, missing_HEX, missing_LEP, list_filt_HCO_ncbi, list_filt_HEX_ncbi, list_filt_LEP_ncbi, list_tot_HCO_ncbi, list_tot_HEX_ncbi, list_tot_LEP_ncbi, res_blast_ncbi_HCO_filtered, res_blast_ncbi_HEX_filtered, res_blast_ncbi_LEP_filtered)
 ```
@@ -87,6 +93,7 @@ ligne2_HEX <- seq(from = 2, to = length(sample_name_ncbi_HEX), by = 4)
 ligne4_HEX <- seq(from = 4, to = length(sample_name_ncbi_HEX), by = 4)
 ligne2_LEP <- seq(from = 2, to = length(sample_name_ncbi_LEP), by = 4)
 ligne4_LEP <- seq(from = 4, to = length(sample_name_ncbi_LEP), by = 4)
+
 # Extracting the previously selected arguments from the taxonomic file
 code_names_HCO <- data.frame(code = sample_name_ncbi_HCO[ligne4_HCO], taxo = sample_name_ncbi_HCO[ligne2_HCO])
 code_names_HCO <- code_names_HCO %>% 
@@ -103,6 +110,7 @@ code_names_LEP <- code_names_LEP %>%
   mutate(code = str_split_fixed(code, " ", 2)[,1],
          taxo = paste(str_split_fixed(taxo, " ", 4)[, 2], str_split_fixed(taxo, " ", 4)[, 3])) %>% 
   as.data.frame()
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(ligne2_HCO, ligne2_HEX, ligne2_LEP, ligne4_HCO, ligne4_HEX, ligne4_LEP, sample_name_ncbi_HCO, sample_name_ncbi_HEX, sample_name_ncbi_LEP)
 ```
@@ -113,6 +121,7 @@ rm(ligne2_HCO, ligne2_HEX, ligne2_LEP, ligne4_HCO, ligne4_HEX, ligne4_LEP, sampl
 res_blast_ncbi_with_taxo_HCO <- merge(code_names_HCO, non_duplicated_HCO_ncbi, by.x = "code", by.y = "subject.acc.ver", all.x = TRUE, all.y = TRUE)
 res_blast_ncbi_with_taxo_HEX <- merge(code_names_HEX, non_duplicated_HEX_ncbi, by.x = "code", by.y = "subject.acc.ver", all.x = TRUE, all.y = TRUE)
 res_blast_ncbi_with_taxo_LEP <- merge(code_names_LEP, non_duplicated_LEP_ncbi, by.x = "code", by.y = "subject.acc.ver", all.x = TRUE, all.y = TRUE)
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(code_names_HCO, code_names_HEX, code_names_LEP, non_duplicated_HCO_ncbi, non_duplicated_HEX_ncbi, non_duplicated_LEP_ncbi)
 ```
@@ -124,6 +133,7 @@ rm(code_names_HCO, code_names_HEX, code_names_LEP, non_duplicated_HCO_ncbi, non_
 res_blast_ncbi_and_feature_table_HCO <- merge(res_blast_ncbi_with_taxo_HCO, feature_table_HCO, by.x = "query.acc.ver", by.y = "OTU.ID", all.x = TRUE, all.y = TRUE)
 res_blast_ncbi_and_feature_table_HEX <- merge(res_blast_ncbi_with_taxo_HEX, feature_table_HEX, by.x = "query.acc.ver", by.y = "OTU.ID", all.x = TRUE, all.y = TRUE)
 res_blast_ncbi_and_feature_table_LEP <- merge(res_blast_ncbi_with_taxo_LEP, feature_table_LEP, by.x = "query.acc.ver", by.y = "OTU.ID", all.x = TRUE, all.y = TRUE)
+
 # Calculating the sum of reads per considered taxonomic level
 res_blast_ncbi_and_feature_table_HCO <- res_blast_ncbi_and_feature_table_HCO %>% 
   mutate(somme = rowSums(.[14:ncol(res_blast_ncbi_and_feature_table_HCO)]))
@@ -131,6 +141,7 @@ res_blast_ncbi_and_feature_table_HEX <- res_blast_ncbi_and_feature_table_HEX %>%
   mutate(somme = rowSums(.[14:ncol(res_blast_ncbi_and_feature_table_HEX)]))
 res_blast_ncbi_and_feature_table_LEP <- res_blast_ncbi_and_feature_table_LEP %>% 
   mutate(somme = rowSums(.[14:ncol(res_blast_ncbi_and_feature_table_LEP)]))
+
 # Making a short version of the tables just above with the sums of the feature tables
 short_ncbi_HCO <- res_blast_ncbi_and_feature_table_HCO %>% 
   select(c(taxo, X..identity, alignment.length, somme)) %>% 
@@ -141,6 +152,7 @@ short_ncbi_HEX <- res_blast_ncbi_and_feature_table_HEX %>%
 short_ncbi_LEP <- res_blast_ncbi_and_feature_table_LEP %>% 
   select(c(taxo, X..identity, alignment.length, somme)) %>% 
   arrange(-somme)
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(res_blast_ncbi_with_taxo_HCO, res_blast_ncbi_with_taxo_HEX, res_blast_ncbi_with_taxo_LEP)
 ```
@@ -167,6 +179,7 @@ phylogeny_HEX <- reference_taxonomy_HEX[grep("<Lineage>", reference_taxonomy_HEX
 scientific_name_HEX <- reference_taxonomy_HEX[grep("<ScientificName>", reference_taxonomy_HEX)]
 phylogeny_LEP <- reference_taxonomy_LEP[grep("<Lineage>", reference_taxonomy_LEP)]
 scientific_name_LEP <- reference_taxonomy_LEP[grep("<ScientificName>", reference_taxonomy_LEP)]
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(reference_taxonomy_HCO_1, reference_taxonomy_HCO_2, reference_taxonomy_HEX, reference_taxonomy_LEP)
 ```
@@ -205,10 +218,12 @@ cumulative_vector_names_LEP[1] <- c(1)
 for (i in 2:length(list_numbers_names_LEP)){ # We start at 2 to be sure that the first scientific name that appears is counted
   cumulative_vector_names_LEP[i] <- list_numbers_names_LEP[i-1] + cumulative_vector_names_LEP[i-1] + 2
 }
+
 # Extracting the names from the list of all the scientific names found before
 scientific_name_HCO <- c(scientific_name_HCO_1[cumulative_vector_names_HCO_1], scientific_name_HCO_2[cumulative_vector_names_HCO_2])
 scientific_name_HEX <- scientific_name_HEX[cumulative_vector_names_HEX]
 scientific_name_LEP <- scientific_name_LEP[cumulative_vector_names_LEP]
+
 # Keeping only the names and not the list of "<ScientificName>Nameofspecies</ScientificName>"
 scientific_name_epurated_HCO <- str_split_fixed(scientific_name_HCO, ">", 2)[, 2] %>% 
   as.character() %>% 
@@ -228,6 +243,8 @@ scientific_name_epurated_LEP <- str_split_fixed(scientific_name_LEP, ">", 2)[, 2
   as.data.frame() %>% 
   rename(scientific_names = V1) %>% 
   select(scientific_names)
+
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(i, list_numbers_names_HCO_1, list_numbers_names_HCO_2, cumulative_vector_names_HCO_1, cumulative_vector_names_HCO_2, scientific_name_HCO_1, scientific_name_HCO_2, scientific_name_HCO, list_numbers_names_HEX, cumulative_vector_names_HEX, scientific_name_HEX, list_numbers_names_LEP, cumulative_vector_names_LEP, scientific_name_LEP)
 ```
@@ -239,6 +256,7 @@ rm(i, list_numbers_names_HCO_1, list_numbers_names_HCO_2, cumulative_vector_name
 names_and_lineage_HCO <- cbind(scientific_name_epurated_HCO, Lineage = c(phylogeny_HCO_1, phylogeny_HCO_2))
 names_and_lineage_HEX <- cbind(scientific_name_epurated_HEX, Lineage = phylogeny_HEX)
 names_and_lineage_LEP <- cbind(scientific_name_epurated_LEP, Lineage = phylogeny_LEP)
+
 # Merging the two tables
 table_ncbi_HCO <- merge(names_and_lineage_HCO, res_blast_ncbi_and_feature_table_HCO, by.x = "scientific_names", by.y = "taxo", all.y = TRUE) %>% 
   rename(Names_NCBI = scientific_names,
@@ -262,6 +280,9 @@ table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Thripidae sp."] <- " 
 table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Tyroborus sp."] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Chelicerata; Arachnida; Acari; Acariformes; Sarcoptiformes; Astigmata; Acaroidea; Acaridae; Tyrophaginae</Lineage>"
 table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Uncultured bdelloid"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Chelicerata; Arachnida; Acari; Acariformes; Trombidiformes; Prostigmata; Eupodina</Lineage>"
 table_ncbi_HCO$Taxonomy_NCBI[table_ncbi_HCO$Names_NCBI == "Unidentified nematode"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Nematoda; unclassified Nematoda</Lineage>"
+
+
+
 table_ncbi_HEX <- merge(names_and_lineage_HEX, res_blast_ncbi_and_feature_table_HEX, by.x = "scientific_names", by.y = "taxo", all.y = TRUE) %>% 
   rename(Names_NCBI = scientific_names,
          Identity_NCBI = X..identity,
@@ -273,12 +294,17 @@ table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Dicopomorpha sp."] <-
 table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Oulema duftschmidi"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Endopterygota; Coleoptera; Polyphaga; Cucujiformia; Chrysomeloidea; Chrysomelidae; Criocerinae; Oulema</Lineage>"
 table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Uncultured Jaminaea"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Fungi; Dikarya; Basidiomycota; Ustilaginomycotina; Exobasidiomycetes; Microstromatales; Microstromatales incertae sedis</Lineage>"
 table_ncbi_HEX$Taxonomy_NCBI[table_ncbi_HEX$Names_NCBI == "Uncultured Jaminaea"] <- "    <Lineage>cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Deuterostomia; Chordata; Craniata; Vertebrata; Gnathostomata; Teleostomi; Euteleostomi; Sarcopterygii; Dipnotetrapodomorpha; Tetrapoda; Amniota; Sauropsida; Sauria; Archelosauria; Archosauria; Dinosauria; Saurischia; Theropoda; Coelurosauria; Aves; Neognathae; Galloanserae; Galliformes; Phasianidae</Lineage>"
+
+
+
+
 table_ncbi_LEP <- merge(names_and_lineage_LEP, res_blast_ncbi_and_feature_table_LEP, by.x = "scientific_names", by.y = "taxo", all.y = TRUE)%>% 
   rename(Names_NCBI = scientific_names,
          Identity_NCBI = X..identity,
          Somme_reads = somme,
          Taxonomy_NCBI = Lineage) %>% 
   select(-c(mismatches, gap.opens, q..start, q..end, s..start, s..end, evalue, bit.score))
+
 # Making a short version of the table with only a few variables
 short_ncbi_HCO <- table_ncbi_HCO %>% 
   select(c(Names_NCBI, Identity_NCBI, alignment.length, Somme_reads, Taxonomy_NCBI)) %>% 
@@ -292,6 +318,12 @@ short_ncbi_LEP <- table_ncbi_LEP %>%
   select(c(Names_NCBI, Identity_NCBI, alignment.length, Somme_reads, Taxonomy_NCBI)) %>% 
   arrange(-Somme_reads) %>% 
   mutate(Provenance = "LEP")
+
+# Writting tables with the name of the added taxa rather than just the code
+write.table(table_ncbi_HCO, "Taxonomy_NCBI/HCO_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
+write.table(table_ncbi_HEX, "Taxonomy_NCBI/HEX_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
+write.table(table_ncbi_LEP, "Taxonomy_NCBI/LEP_ncbi.csv", sep = ";", dec = ".", na = "NA", col.names = TRUE, row.names = FALSE)
+
 # Cleaning up the environment to prevent it from being overloaded
 rm(names_and_lineage_HCO, scientific_name_epurated_HCO, phylogeny_HCO_1, phylogeny_HCO_2, names_and_lineage_HEX, scientific_name_epurated_HEX, phylogeny_HEX, names_and_lineage_LEP, scientific_name_epurated_LEP, phylogeny_LEP)
 ```
@@ -313,9 +345,11 @@ res_blast_arthemis_LEP <- read.csv("C:/Documents/ECOLE/2021-2022 Montpellier Sup
 res_blast_arthemis_with_lineage_HCO <- res_blast_arthemis_HCO %>% 
   select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
   mutate(Taxonomy_ARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+
 res_blast_arthemis_with_lineage_HEX <- res_blast_arthemis_HEX %>% 
   select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
   mutate(Taxonomy_ARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
+
 res_blast_arthemis_with_lineage_LEP <- res_blast_arthemis_LEP %>% 
   select(querry.acc, Phylum, Order, Class, Family, Genus, Species, identity) %>% 
   mutate(Taxonomy_ARTHEMIS = paste(Phylum, Class, Order, Family, Genus, Species, sep = ";"))
@@ -366,6 +400,9 @@ table_ncbi_and_arthemis_HEX <- merge(table_ncbi_HEX, table_arthemis_HEX, by.x = 
 table_ncbi_and_arthemis_LEP <- merge(table_ncbi_LEP, table_arthemis_LEP, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
   mutate(Provenance = "LEP") %>% 
   as.data.frame()
+
+
+
 # Making a shorter and more readable table
 short_ncbi_and_arthemis_HCO <- table_ncbi_and_arthemis_HCO %>% 
   select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, alignment.length, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Provenance))
@@ -443,6 +480,9 @@ table_ncbi_arthemis_and_bold_HEX <- merge(table_ncbi_and_arthemis_HEX, table_bol
 table_ncbi_arthemis_and_bold_LEP <- merge(table_ncbi_and_arthemis_LEP, table_bold_LEP, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE) %>% 
   mutate(Provenance = "LEP") %>% 
   as.data.frame()
+
+
+
 # Making a shorter and more readable table
 short_ncbi_arthemis_and_bold_HCO <- table_ncbi_arthemis_and_bold_HCO %>% 
   select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Provenance))
@@ -771,6 +811,7 @@ combined_table_three_blasts_all_markers <- combined_table_three_blasts_all_marke
   arrange(-Identity_NCBI)
 # Writing a csv with the final table
 write.table(combined_table_three_blasts_all_markers, "comparing_blast_methods.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+
 ```
 
 # BOLD and ARTHEMIS (This part down is facultative. It doesn't serve any purpose here, but it might depending on your study)
@@ -835,6 +876,7 @@ rm(res_blast_bold_and_arthemis_with_lineage_HCO, res_blast_bold_and_arthemis_wit
 final_table_four_blasts_HCO <- merge(table_ncbi_arthemis_and_bold_HCO, table_bold_and_arthemis_HCO, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE)
 final_table_four_blasts_HEX <- merge(table_ncbi_arthemis_and_bold_HEX, table_bold_and_arthemis_HEX, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE)
 final_table_four_blasts_LEP <- merge(table_ncbi_arthemis_and_bold_LEP, table_bold_and_arthemis_LEP, by.x = "query.acc.ver", by.y = "querry.acc", all.x = TRUE, all.y = TRUE)
+
 # Making a shorter and more readable table
 short_table_four_blasts_HCO <- final_table_four_blasts_HCO %>% 
   select(c(query.acc.ver, Names_NCBI, Identity_NCBI, Identity_ARTHEMIS, Identity_BOLD, Identity_BOLDandARTHEMIS, Species_ARTHEMIS, Genus_ARTHEMIS, Family_ARTHEMIS, Order_ARTHEMIS, Class_ARTHEMIS, Phylum_ARTHEMIS, Species_BOLD, Genus_BOLD, Family_BOLD, Order_BOLD, Class_BOLD, Phylum_BOLD, Species_BOLDandARTHEMIS, Genus_BOLDandARTHEMIS, Family_BOLDandARTHEMIS, Order_BOLDandARTHEMIS, Class_BOLDandARTHEMIS, Phylum_BOLDandARTHEMIS, Somme_reads, Taxonomy_NCBI, Taxonomy_ARTHEMIS, Taxonomy_BOLD, Taxonomy_BOLDandARTHEMIS, Provenance))
@@ -1165,6 +1207,7 @@ final_combined_table_all_markers <- final_combined_table_all_markers %>%
   arrange(-Identity_NCBI)
 # Writing a csv with the final table
 write.table(final_combined_table_all_markers, "comparing_blast_methods.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+
 ```
 
 # Combining all the tables into a big data base
@@ -1487,6 +1530,7 @@ final_combined_table_all_markers <- final_combined_table_all_markers %>%
   arrange(-Identity_NCBI)
 # Writing a csv with the final table
 write.table(final_combined_table_all_markers, "comparing_blast_methods.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+
 ```
 
 
@@ -1495,8 +1539,14 @@ write.table(final_combined_table_all_markers, "comparing_blast_methods.csv", sep
 # BIN
 ```{r}
 grep("137728da87149e03fcb1f5246de1475e", final_table_ncbi_and_arthemis_HCO)
+
 ftable_ncbi <- rbind(short_ncbi_HCO, short_ncbi_HEX, short_ncbi_LEP)
+
 final_table_HCO <- merge(final_table_HCO, res_blast_ARTHEMIS_HCO, by.x = "query.acc.ver", by.y = "Feature.ID")
+
 list_arthro <- ftable_ncbi[grep("Arthropoda", ftable_ncbi$Taxonomy_NCBI),]
+
 write.table(short_ncbi_HCO, "short_crosssing_table.csv", sep = ";", dec = ".", col.names = TRUE, row.names = FALSE)
+
 ```
+
