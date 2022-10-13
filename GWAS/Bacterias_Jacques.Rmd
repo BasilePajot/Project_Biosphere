@@ -196,7 +196,7 @@ rm(liste_clusterA, sommeCA, sommeCJA, sommeCJF)
 
 ```{r}
 # We calculate the abundance using the last matrix with the sorted data by size and transform it to be able to manipulate the clusters/taxonomic groups more easily. The abundance represents the proportion of reads of each cluster/taxonomic group per EPO. We use the effectives of the reads per EPO and taxonomic group and divide it by the total number of reads per EPO
-ABONDANCE_A <- t(SA) / sommeA # PB: ARE WE SURE WE SHOULD USE THIS SUM ? on ne devrait pas refaire une somme sur les nouvelles données triées ?
+ABONDANCE_A <- t(SA) / sommeA 
 ABONDANCE_JA <- t(SJA) / sommeJA
 ABONDANCE_JF <- t(SJF) / sommeJF
 
@@ -256,7 +256,7 @@ ACPJA <- PCA(ABONDANCE_JA, scale.unit = TRUE, ncp = 40, graph = TRUE)
 ACPJF <- PCA(ABONDANCE_JF, scale.unit = TRUE, ncp = 40, graph = TRUE)
 
 # Plotting the result of the PCA
-plot.PCA(ACPA, axes = c(1, 2), choix = "ind", habillage = 13) # PB: COMMENT ON CHOISIT L'HABILLAGE ? CHOIX ?
+plot.PCA(ACPA, axes = c(1, 2), choix = "ind", habillage = 13) 
 plot.PCA(ACPJA, axes = c(1, 2), choix = "ind", habillage = 2)
 plot.PCA(ACPJF, axes = c(1, 2), choix = "ind", habillage = 1, xlim = c(-15,20))
 
@@ -354,8 +354,7 @@ rm(i, RES_ACPA, RES_ACPJA, RES_ACPJF)
 BLUPSA <- data.frame()
 BLUPSJA <- data.frame()
 BLUPSJF <- data.frame()
-for (i in 1:40) { # We will be calculating blups for the 40 axis of the PCA PB: should we not use only the "good" ones ?
-  # Calculating the blups for each axis
+for (i in 1:40) { # We will be calculating blups for the 40 axis of the PCA 
   bluA <- as.data.frame(blups(CO_ACPA[,i], CO_ACPA)) 
   bluJA <- as.data.frame(blups(CO_ACPJA[,i], CO_ACPJA))
   bluJF <- as.data.frame(blups(CO_ACPJF[,i], CO_ACPJF))
@@ -643,15 +642,15 @@ ABONDANCE_JF$BLOC <- sapply(strsplit(rownames(ABONDANCE_JF), "[.]"), "[", 3)
 # Calculating the variance in the three data frames using the Hdeux function defined before. The number of columns of the three data frames are different so we will apply three loops
 RES_OTUA <- c()
 for (i in seq_along(1:(ncol(ABONDANCE_A)-1))) {
-  RES_OTUA <- c(RES_OTUA, c(i, as.numeric(Hdeux(ABONDANCE_A[,i], ABONDANCE_A)))) # PB: il y a un soucis sur cette ligne "Error in mlRespMod(fr, REML = REMLpass) : response must be numeric"
+  RES_OTUA <- c(RES_OTUA, c(i, as.numeric(Hdeux(ABONDANCE_A[,i], ABONDANCE_A)))) 
 }
 RES_OTUJA <- c()
 for (i in seq_along(1:(ncol(ABONDANCE_JA)-1))) {
-  RES_OTUJA <- c(RES_OTUJA, c(i, Hdeux(ABONDANCE_JA[,i], ABONDANCE_JA))) # PB: il y a un soucis sur cette ligne "Error in mlRespMod(fr, REML = REMLpass) : response must be numeric"
+  RES_OTUJA <- c(RES_OTUJA, c(i, Hdeux(ABONDANCE_JA[,i], ABONDANCE_JA))) 
 }
 RES_OTUJF <- c()
 for (i in seq_along(1:(ncol(ABONDANCE_JF)-1))) {
-  RES_OTUJF <- c(RES_OTUJF, c(i, Hdeux(ABONDANCE_JF[,i], ABONDANCE_JF))) # PB: il y a un soucis sur cette ligne "Error in mlRespMod(fr, REML = REMLpass) : response must be numeric"
+  RES_OTUJF <- c(RES_OTUJF, c(i, Hdeux(ABONDANCE_JF[,i], ABONDANCE_JF))) 
 }
 
 # Transforming the resulting vector into a data frame and renaming the columns to manipulate them more easily all the data
@@ -673,7 +672,7 @@ moyenneJA <- apply(ABONDANCE_JA[,1:(ncol(ABONDANCE_JA)-2)], 2, mean)
 moyenneJF <- apply(ABONDANCE_JF[,1:(ncol(ABONDANCE_JF)-2)], 2, mean)
 
 # Plotting the heritability of the data in the abundance tables and their distribution
-par(mfrow = c(3,2))
+par(mfrow = c(1,2))
 plot(RES_OTUA$H2)
 hist(RES_OTUA$H2)
 plot(RES_OTUJA$H2)
@@ -682,7 +681,7 @@ plot(RES_OTUJF$H2)
 hist(RES_OTUJF$H2)
 par(mfrow = c(1,1))
 
-# Plotting the heritability of the abundance depending on the mean of the abundance PB: JE SAIS PAS CE QUE ÇA VEUT DIRE ...
+# Plotting the heritability of the abundance depending on the mean of the abundance 
 par(mfrow = c(3,1))
 plot(log10(moyenneA), RES_OTUA$H2)
 plot(log10(moyenneJA), RES_OTUJA$H2)
@@ -690,7 +689,7 @@ plot(log10(moyenneJF), RES_OTUJF$H2)
 par(mfrow = c(1,1))
 
 # Calculating a list of the clusters/taxonomic groups in which the heritability is superior to 0.4
-liste_otuA <- which(RES_OTUA$H2>0.4)   # PBB: Jeter un oeil à valeurs de départ
+liste_otuA <- which(RES_OTUA$H2>0.4)   
 liste_otuJA <- which(RES_OTUJA$H2>0.4)
 liste_otuJF <- which(RES_OTUJF$H2>0.4)
 # Selecting these clusters/taxonomic groups
@@ -825,10 +824,6 @@ plot(1:40, RESA$H2)
 plot(1:40, RESJA$H2)
 plot(1:40, RESJF$H2) # The numbers 6 and 12 are really interesting (H² > 0.5)
 
-# Les bacteries signifiantes par axe
-# CA(res.caA$eig)  # PB: C'est quoi ça ?
-# dim(res.ca$eig)  # PB: C'est quoi ça ?
-
 # Making a list of the axis that are the mot heritable in the analysis
 liste_axesA <- which(RESA$H2 >= 0)
 liste_axesJA <- which(RESJA$H2 >= 0)
@@ -909,7 +904,7 @@ RESHA <- c()
 RESHJA <- c()
 RESHJF <- c()
 for (i in 1:40) {
-  RESHA <- c(RESHA, c(i, Hdeux(COHA[, i], COHA))) # PBB: il y a à nouveau le message d'erreur (même que celui qui est apparu au niveau du calcul de l'héritabilité sur abondance)
+  RESHA <- c(RESHA, c(i, Hdeux(COHA[, i], COHA))) 
   RESHJA <- c(RESHJA, c(i, Hdeux(COHJA[, i], COHJA)))
 }
 for (i in 1:40) {
@@ -1074,7 +1069,7 @@ dim(SG) # Getting the new dimensions of the SG table
 SG <- SG[- which(rownames(SG)=="TT04DD79_27"), ]
 
 # Making a list of the numbers corresponding to each EPOs
-liste_geno <- sapply(strsplit(rownames(SG), "_"), "[", 2) # PB: on se retrouve avec plein de NA, on doit les enlever ?
+liste_geno <- sapply(strsplit(rownames(SG), "_"), "[", 2) 
 # Extracting the selected genotypes in the previous step from the blups matrix
 SGA <- SG[which(liste_geno %in% as.character(BLUPSA$EPO)), ]
 SGJA <- SG[which(liste_geno %in% as.character(BLUPSJA$EPO)), ]
@@ -1126,7 +1121,7 @@ qJA <- 1 - pJA
 qJF <- 1 - pJF
 
 # Taking the minimum of the p and q corresponding to each genotype
-mafA <- apply(cbind(pA,qA), 1, min) # PB: pk prendre le minimum ?
+mafA <- apply(cbind(pA,qA), 1, min) 
 mafJA <- apply(cbind(pJA,qJA), 1, min)
 mafJF <- apply(cbind(pJF,qJF), 1, min)
 
